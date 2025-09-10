@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Download, FileSpreadsheet, ChefHat, Wine, Package, Building, Users, Calculator, BarChart3 } from 'lucide-react-native';
+import { Download, FileSpreadsheet, ChefHat, Wine, Package, Building, Users, Calculator, ChartBar as BarChart3 } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
