@@ -9,6 +9,7 @@ import {
   Alert,
   RefreshControl,
   Dimensions,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -669,24 +670,33 @@ export default function Restaurant() {
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
               <View style={styles.topButtons}>
-                <TouchableOpacity 
-                  style={[styles.actionButton, { backgroundColor: '#95a5a6' }]} 
+                <Pressable 
+                  style={({ pressed }) => [
+                    styles.actionButton, 
+                    { backgroundColor: pressed ? '#7f8c8d' : '#95a5a6' }
+                  ]} 
                   onPress={handleNoReceipt}
                 >
                   <Receipt size={16} color="#fff" />
                   <Text style={styles.actionButtonText}>NO RECEIPT</Text>
-                </TouchableOpacity>
+                </Pressable>
 
-                <TouchableOpacity 
-                  style={[styles.actionButton, { backgroundColor: '#3498db' }]} 
+                <Pressable 
+                  style={({ pressed }) => [
+                    styles.actionButton, 
+                    { backgroundColor: pressed ? '#2980b9' : '#3498db' }
+                  ]} 
                   onPress={handleSaveOrder}
                 >
                   <Clock size={16} color="#fff" />
                   <Text style={styles.actionButtonText}>SAVE</Text>
-                </TouchableOpacity>
+                </Pressable>
 
-                <TouchableOpacity 
-                  style={[styles.actionButton, { backgroundColor: cart.length > 0 ? '#27ae60' : '#95a5a6' }]}
+                <Pressable 
+                  style={({ pressed }) => [
+                    styles.actionButton, 
+                    { backgroundColor: cart.length > 0 ? (pressed ? '#229954' : '#27ae60') : '#95a5a6' }
+                  ]}
                   onPress={() => {
                     if (cart.length === 0) {
                       Alert.alert('Error', 'Cart is empty');
@@ -703,33 +713,42 @@ export default function Restaurant() {
                   <Text style={styles.actionButtonText}>
                     {orderPlaced ? 'ORDER PLACED' : 'ORDER'}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
 
               <View style={styles.bottomButtons}>
-                <TouchableOpacity 
-                  style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]} 
+                <Pressable 
+                  style={({ pressed }) => [
+                    styles.paymentButton, 
+                    { backgroundColor: pressed ? '#1a252f' : '#2c3e50' }
+                  ]} 
                   onPress={handleCashPayment}
                 >
                   <DollarSign size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>CASH</Text>
-                </TouchableOpacity>
+                </Pressable>
 
-                <TouchableOpacity 
-                  style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]} 
+                <Pressable 
+                  style={({ pressed }) => [
+                    styles.paymentButton, 
+                    { backgroundColor: pressed ? '#1a252f' : '#2c3e50' }
+                  ]} 
                   onPress={handleCreditPayment}
                 >
                   <CreditCard size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>CREDIT</Text>
-                </TouchableOpacity>
+                </Pressable>
 
-                <TouchableOpacity 
-                  style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]} 
+                <Pressable 
+                  style={({ pressed }) => [
+                    styles.paymentButton, 
+                    { backgroundColor: pressed ? '#1a252f' : '#2c3e50' }
+                  ]} 
                   onPress={handleSettle}
                 >
                   <Settings size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>SETTLE</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
           </LinearGradient>
