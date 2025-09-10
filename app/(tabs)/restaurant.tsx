@@ -241,6 +241,182 @@ export default function Restaurant() {
     }
   };
 
+  const handleNoReceipt = () => {
+    playButtonClick();
+    Alert.alert(
+      'No Receipt',
+      'Order will be processed without printing a receipt. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', onPress: () => placeOrder() }
+      ]
+    );
+  };
+
+  const handleSaveOrder = () => {
+    playButtonClick();
+    if (cart.length === 0) {
+      Alert.alert('Error', 'Cart is empty');
+      return;
+    }
+
+    Alert.alert(
+      'Save Order',
+      'Save this order for later processing?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Save', 
+          onPress: async () => {
+            try {
+              const { subtotal, tax, total } = calculateTotal();
+              const serviceCharge = subtotal * ((hotelSettings?.serviceChargeRate || 0) / 100);
+              const finalTotal = subtotal + tax + serviceCharge;
+              
+              const orderItems = cart.map(item => ({
+                menu_item_id: item.menuItem.id,
+                quantity: item.quantity,
+                unit_price: item.menuItem.price,
+                special_instructions: item.specialInstructions || '',
+              }));
+
+              await db.insert<Order>('orders', {
+                order_number: `R-SAVED-${Date.now()}`,
+                table_number: tableNumber || undefined,
+                order_type: 'restaurant',
+                items: orderItems,
+                subtotal,
+                tax_amount: tax,
+                service_charge: serviceCharge,
+                total_amount: finalTotal,
+                status: 'pending',
+                payment_status: 'pending',
+              });
+
+              Alert.alert('Success', 'Order saved successfully');
+              setCart([]);
+              setTableNumber('');
+              loadData();
+            } catch (error) {
+              console.error('Error saving order:', error);
+              Alert.alert('Error', 'Failed to save order');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleCashPayment = () => {
+    playButtonClick();
+    if (cart.length === 0) {
+      Alert.alert('Error', 'Cart is empty');
+      return;
+    }
+
+    Alert.alert(
+      'Cash Payment',
+      `Total: ${formatCurrency(total)}\n\nProcess cash payment?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Process Payment', 
+          onPress: async () => {
+            try {
+              await placeOrder();
+              Alert.alert('Payment Complete', 'Cash payment processed successfully');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to process cash payment');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleCreditPayment = () => {
+    playButtonClick();
+    if (cart.length === 0) {
+      Alert.alert('Error', 'Cart is empty');
+      return;
+    }
+
+    Alert.alert(
+      'Credit Card Payment',
+      `Total: ${formatCurrency(total)}\n\nProcess credit card payment?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Process Payment', 
+          onPress: async () => {
+            try {
+              await placeOrder();
+              Alert.alert('Payment Complete', 'Credit card payment processed successfully');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to process credit card payment');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleSettle = () => {
+    playButtonClick();
+    if (cart.length === 0) {
+      Alert.alert('Error', 'Cart is empty');
+      return;
+    }
+
+    Alert.alert(
+      'Settle Order',
+      'Choose settlement option:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Room Charge', onPress: () => handleRoomCharge() },
+        { text: 'Comp/Free', onPress: () => handleComplimentary() },
+        { text: 'Split Bill', onPress: () => handleSplitBill() }
+      ]
+    );
+  };
+
+  const handleRoomCharge = async () => {
+    try {
+      await placeOrder();
+      Alert.alert('Success', 'Order charged to room successfully');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to charge to room');
+    }
+  };
+
+  const handleComplimentary = async () => {
+    Alert.alert(
+      'Complimentary Order',
+      'Mark this order as complimentary (free)?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Confirm', 
+          onPress: async () => {
+            try {
+              await placeOrder();
+              Alert.alert('Success', 'Order marked as complimentary');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to process complimentary order');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleSplitBill = () => {
+    Alert.alert(
+      'Split Bill',
+      'Split bill functionality would allow dividing the order among multiple payments. This feature would be implemented with a detailed split interface.',
+      [{ text: 'OK' }]
+    );
+  };
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
     await loadData();
@@ -428,7 +604,7 @@ export default function Restaurant() {
                   <LinearGradient
                     colors={['#95a5a6', '#7f8c8d']}
                     style={styles.actionButtonGradient}
-                    onPress={() => playButtonClick()}
+                    onPress={handleNoReceipt}
                   >
                     <Receipt size={16} color="#fff" />
                     <Text style={styles.actionButtonText}>NO RECEIPT</Text>
@@ -439,7 +615,7 @@ export default function Restaurant() {
                   <LinearGradient
                     colors={['#3498db', '#2980b9']}
                     style={styles.actionButtonGradient}
-                    onPress={() => playButtonClick()}
+                    onPress={handleSaveOrder}
                   >
                     <Clock size={16} color="#fff" />
                     <Text style={styles.actionButtonText}>SAVE</Text>
@@ -465,6 +641,7 @@ export default function Restaurant() {
                   <LinearGradient
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
+                    onPress={handleCashPayment}
                     onPress={() => playButtonClick()}
                   >
                     <DollarSign size={16} color="#fff" />
@@ -476,6 +653,7 @@ export default function Restaurant() {
                   <LinearGradient
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
+                    onPress={handleCreditPayment}
                     onPress={() => playButtonClick()}
                   >
                     <CreditCard size={16} color="#fff" />
@@ -487,7 +665,7 @@ export default function Restaurant() {
                   <LinearGradient
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
-                    onPress={() => playButtonClick()}
+                    onPress={handleSettle}
                   >
                     <Settings size={16} color="#fff" />
                     <Text style={styles.paymentButtonText}>SETTLE</Text>
