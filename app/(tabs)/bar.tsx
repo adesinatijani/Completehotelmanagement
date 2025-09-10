@@ -1022,6 +1022,13 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+    height: 48,
+    borderRadius: 6,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
   actionButtonText: {
     fontSize: 12,
     fontFamily: 'Inter-Bold',
@@ -1035,13 +1042,6 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 6,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-  },
-  paymentButtonTouch: {
-    flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
