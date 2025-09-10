@@ -62,6 +62,8 @@ export default function Bar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [hotelSettings, setHotelSettings] = useState<any>(null);
+  const [orderPlaced, setOrderPlaced] = useState(false);
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -199,8 +201,9 @@ export default function Bar() {
         special_instructions: item.specialInstructions || '',
       }));
 
-      await db.insert<Order>('orders', {
-        order_number: `B-${Date.now()}`,
+      const orderNumber = `B-${Date.now()}`;
+      const newOrder = await db.insert<Order>('orders', {
+        order_number: orderNumber,
         table_number: tableNumber || undefined,
         order_type: 'bar',
         items: orderItems,
@@ -212,19 +215,43 @@ export default function Bar() {
         payment_status: 'pending',
       });
 
+      setOrderPlaced(true);
+      setCurrentOrderId(newOrder.id);
+      Alert.alert('Success', 'Order placed! Please select payment method to complete.');
+    } catch (error) {
+      console.error('Error placing order:', error);
+      Alert.alert('Error', 'Failed to place order');
+    }
+  };
+
+  const completePayment = async (paymentMethod: string) => {
+    if (!currentOrderId) return;
+
+    try {
+      // Update order payment status
+      await db.update<Order>('orders', currentOrderId, {
+        payment_status: 'paid',
+        status: 'confirmed',
+      });
+
       playOrderComplete();
-      Alert.alert('Success', 'Order placed successfully');
       
       // Print receipt if printer available
       try {
+        const { subtotal, tax, serviceCharge, total } = calculateTotal();
         await receiptPrinter.printOrderReceipt({
           order_number: `B-${Date.now()}`,
           order_type: 'bar',
-          items: orderItems,
+          items: cart.map(item => ({
+            menu_item_id: item.menuItem.id,
+            quantity: item.quantity,
+            unit_price: item.menuItem.price,
+            special_instructions: item.specialInstructions || '',
+          })),
           subtotal,
           tax_amount: tax,
           service_charge: serviceCharge,
-          total_amount: finalTotal,
+          total_amount: total,
           created_at: new Date().toISOString(),
           table_number: tableNumber,
         }, hotelSettings?.currency || 'USD', hotelSettings);
@@ -232,25 +259,33 @@ export default function Bar() {
         console.warn('Print failed:', printError);
       }
       
+      Alert.alert('Payment Complete', `${paymentMethod} payment processed successfully`);
+      
+      // Clear cart and reset state
       setCart([]);
       setTableNumber('');
+      setOrderPlaced(false);
+      setCurrentOrderId(null);
       loadData();
     } catch (error) {
-      console.error('Error placing order:', error);
-      Alert.alert('Error', 'Failed to place order');
+      console.error('Error completing payment:', error);
+      Alert.alert('Error', 'Failed to process payment');
     }
   };
-
   const handleNoReceipt = () => {
     playButtonClick();
-    Alert.alert(
-      'No Receipt',
-      'Order will be processed without printing a receipt. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Continue', onPress: () => placeOrder() }
-      ]
-    );
+    if (!orderPlaced) {
+      Alert.alert(
+        'No Receipt',
+        'Order will be processed without printing a receipt. Continue?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Continue', onPress: () => placeOrder() }
+        ]
+      );
+    } else {
+      completePayment('No Receipt');
+    }
   };
 
   const handleSaveOrder = () => {
@@ -260,6 +295,10 @@ export default function Bar() {
       return;
     }
 
+    if (orderPlaced) {
+      Alert.alert('Info', 'Order already placed. Please complete payment or start a new order.');
+      return;
+    }
     Alert.alert(
       'Save Order',
       'Save this order for later processing?',
@@ -314,24 +353,33 @@ export default function Bar() {
       return;
     }
 
-    Alert.alert(
-      'Cash Payment',
-      `Total: ${formatCurrency(total)}\n\nProcess cash payment?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Process Payment', 
-          onPress: async () => {
-            try {
+    const { total } = calculateTotal();
+    
+    if (!orderPlaced) {
+      Alert.alert(
+        'Cash Payment',
+        `Total: ${formatCurrency(total)}\n\nPlace order and process cash payment?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Process Payment', 
+            onPress: async () => {
               await placeOrder();
-              Alert.alert('Payment Complete', 'Cash payment processed successfully');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to process cash payment');
+              await completePayment('Cash');
             }
           }
-        }
-      ]
-    );
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Cash Payment',
+        `Total: ${formatCurrency(total)}\n\nProcess cash payment?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Process Payment', onPress: () => completePayment('Cash') }
+        ]
+      );
+    }
   };
 
   const handleCreditPayment = () => {
@@ -341,24 +389,33 @@ export default function Bar() {
       return;
     }
 
-    Alert.alert(
-      'Credit Card Payment',
-      `Total: ${formatCurrency(total)}\n\nProcess credit card payment?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Process Payment', 
-          onPress: async () => {
-            try {
+    const { total } = calculateTotal();
+    
+    if (!orderPlaced) {
+      Alert.alert(
+        'Credit Card Payment',
+        `Total: ${formatCurrency(total)}\n\nPlace order and process credit card payment?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Process Payment', 
+            onPress: async () => {
               await placeOrder();
-              Alert.alert('Payment Complete', 'Credit card payment processed successfully');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to process credit card payment');
+              await completePayment('Credit Card');
             }
           }
-        }
-      ]
-    );
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Credit Card Payment',
+        `Total: ${formatCurrency(total)}\n\nProcess credit card payment?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Process Payment', onPress: () => completePayment('Credit Card') }
+        ]
+      );
+    }
   };
 
   const handleSettle = () => {
@@ -381,12 +438,10 @@ export default function Bar() {
   };
 
   const handleRoomCharge = async () => {
-    try {
+    if (!orderPlaced) {
       await placeOrder();
-      Alert.alert('Success', 'Order charged to room successfully');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to charge to room');
     }
+    await completePayment('Room Charge');
   };
 
   const handleComplimentary = async () => {
@@ -398,12 +453,10 @@ export default function Bar() {
         { 
           text: 'Confirm', 
           onPress: async () => {
-            try {
+            if (!orderPlaced) {
               await placeOrder();
-              Alert.alert('Success', 'Order marked as complimentary');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to process complimentary order');
             }
+            await completePayment('Complimentary');
           }
         }
       ]
@@ -641,10 +694,14 @@ export default function Bar() {
                   <LinearGradient
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
-                    onPress={handleCashPayment}
                   >
-                    <DollarSign size={16} color="#fff" />
-                    <Text style={styles.paymentButtonText}>CASH</Text>
+                    <TouchableOpacity 
+                      style={styles.paymentButtonTouch}
+                      onPress={handleCashPayment}
+                    >
+                      <DollarSign size={16} color="#fff" />
+                      <Text style={styles.paymentButtonText}>CASH</Text>
+                    </TouchableOpacity>
                   </LinearGradient>
                 </TouchableOpacity>
 
@@ -652,10 +709,14 @@ export default function Bar() {
                   <LinearGradient
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
-                    onPress={handleCreditPayment}
                   >
-                    <CreditCard size={16} color="#fff" />
-                    <Text style={styles.paymentButtonText}>CREDIT</Text>
+                    <TouchableOpacity 
+                      style={styles.paymentButtonTouch}
+                      onPress={handleCreditPayment}
+                    >
+                      <CreditCard size={16} color="#fff" />
+                      <Text style={styles.paymentButtonText}>CREDIT</Text>
+                    </TouchableOpacity>
                   </LinearGradient>
                 </TouchableOpacity>
 
@@ -663,10 +724,14 @@ export default function Bar() {
                   <LinearGradient
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
-                    onPress={handleSettle}
                   >
-                    <Settings size={16} color="#fff" />
-                    <Text style={styles.paymentButtonText}>SETTLE</Text>
+                    <TouchableOpacity 
+                      style={styles.paymentButtonTouch}
+                      onPress={handleSettle}
+                    >
+                      <Settings size={16} color="#fff" />
+                      <Text style={styles.paymentButtonText}>SETTLE</Text>
+                    </TouchableOpacity>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
@@ -1000,6 +1065,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter-Bold',
     color: '#fff',
+  },
+  paymentButtonTouch: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
   },
   templateSection: {
     backgroundColor: 'white',
