@@ -702,7 +702,6 @@ export default function Restaurant() {
                 <TouchableOpacity 
                   style={styles.actionButton}
                   onPress={() => {
-                    if (cart.length === 0) {
                       Alert.alert('Error', 'Cart is empty');
                       return;
                     }
