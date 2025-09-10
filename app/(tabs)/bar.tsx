@@ -1047,6 +1047,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  paymentButtonTouch: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
   paymentButtonText: {
     fontSize: 12,
     fontFamily: 'Inter-Bold',
