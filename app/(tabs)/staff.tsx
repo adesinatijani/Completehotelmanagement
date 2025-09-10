@@ -62,13 +62,8 @@ export default function Staff() {
 
   const loadStaff = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('full_name');
-
-      if (error) throw error;
-      setStaff(data || []);
+      const staffData = await db.select<Profile>('profiles');
+      setStaff(staffData);
     } catch (error) {
       console.error('Error loading staff:', error);
       Alert.alert('Error', 'Failed to load staff members');
@@ -84,26 +79,13 @@ export default function Staff() {
     }
 
     try {
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      // Create profile in local database
+      await db.insert('profiles', {
         email: newStaffMember.email,
-        password: newStaffMember.password,
-        email_confirm: true,
+        full_name: newStaffMember.full_name,
+        role: newStaffMember.role,
+        is_active: true,
       });
-
-      if (authError) throw authError;
-
-      // Create profile
-      if (authData.user) {
-        const { error: profileError } = await supabase.from('profiles').insert({
-          id: authData.user.id,
-          email: newStaffMember.email,
-          full_name: newStaffMember.full_name,
-          role: newStaffMember.role,
-        });
-
-        if (profileError) throw profileError;
-      }
 
       Alert.alert('Success', 'Staff member created successfully');
       setNewStaffModal(false);
@@ -122,12 +104,7 @@ export default function Staff() {
 
   const updateStaffRole = async (staffId: string, newRole: Profile['role']) => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', staffId);
-
-      if (error) throw error;
+      await db.update('profiles', staffId, { role: newRole });
 
       setStaff(staff.map(member => 
         member.id === staffId ? { ...member, role: newRole } : member

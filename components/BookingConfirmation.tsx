@@ -1,8 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CircleCheck as CheckCircle, Calendar, User, MapPin, DollarSign, Mail, Phone } from 'lucide-react-native';
 import { Database } from '@/types/database';
+import { receiptPrinter } from '@/lib/printer';
+import { currencyManager } from '@/lib/currency';
+import { loadHotelSettings } from '@/lib/storage';
 
 type Booking = Database['public']['Tables']['bookings']['Row'];
 type Room = Database['public']['Tables']['rooms']['Row'];
@@ -24,6 +27,26 @@ export function BookingConfirmation({
   onPrint, 
   onEmail 
 }: BookingConfirmationProps) {
+  const [hotelSettings, setHotelSettings] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    if (visible) {
+      loadSettings();
+    }
+  }, [visible]);
+
+  const loadSettings = async () => {
+    try {
+      const settings = await loadHotelSettings();
+      setHotelSettings(settings);
+      if (settings?.currency) {
+        currencyManager.setCurrency(settings.currency);
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  };
+
   if (!booking || !room) return null;
 
   const calculateNights = (checkIn: string, checkOut: string) => {
@@ -34,6 +57,39 @@ export function BookingConfirmation({
   };
 
   const nights = calculateNights(booking.check_in, booking.check_out);
+  
+  const formatCurrency = (amount: number) => {
+    return currencyManager.formatAmount(amount, hotelSettings?.currency);
+  };
+
+  const handlePrint = async () => {
+    try {
+      if (!hotelSettings) {
+        Alert.alert('Error', 'Hotel settings not loaded. Please try again.');
+        return;
+      }
+      
+      await receiptPrinter.printBookingConfirmation({
+        booking,
+        room,
+        hotelSettings,
+        currency: hotelSettings.currency || 'USD',
+      });
+      
+      Alert.alert('Success', 'Booking confirmation printed successfully!');
+    } catch (error) {
+      console.error('Print error:', error);
+      Alert.alert('Error', 'Failed to print booking confirmation');
+    }
+  };
+
+  const handleEmail = () => {
+    Alert.alert(
+      'Email Confirmation',
+      `Email confirmation would be sent to:\n${booking.guest_email}\n\nThis feature would integrate with your email service provider.`,
+      [{ text: 'OK' }]
+    );
+  };
 
   return (
     <Modal
@@ -112,10 +168,10 @@ export function BookingConfirmation({
                 <DollarSign size={20} color="#1e3a8a" />
                 <View style={styles.detailContent}>
                   <Text style={styles.detailLabel}>Total Amount</Text>
-                  <Text style={styles.detailValue}>${booking.total_amount}</Text>
+                  <Text style={styles.detailValue}>{formatCurrency(booking.total_amount)}</Text>
                   {booking.deposit_amount > 0 && (
                     <Text style={styles.detailSubtext}>
-                      Deposit: ${booking.deposit_amount}
+                      Deposit: {formatCurrency(booking.deposit_amount)}
                     </Text>
                   )}
                 </View>
@@ -149,11 +205,11 @@ export function BookingConfirmation({
             </View>
 
             <View style={styles.actions}>
-              <TouchableOpacity style={styles.actionButton} onPress={onPrint}>
+              <TouchableOpacity style={styles.actionButton} onPress={handlePrint}>
                 <Text style={styles.actionButtonText}>Print Confirmation</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.actionButton} onPress={onEmail}>
+              <TouchableOpacity style={styles.actionButton} onPress={handleEmail}>
                 <Text style={styles.actionButtonText}>Email Guest</Text>
               </TouchableOpacity>
 

@@ -16,6 +16,11 @@ import { supabase } from '@/lib/supabase';
 import { Database } from '@/types/database';
 import { DatePicker } from '@/components/DatePicker';
 import { Calculator, DollarSign, TrendingUp, TrendingDown, Calendar, FileText, CreditCard, ChartPie as PieChart, Star, Sparkles, ChefHat, Wine, Download } from 'lucide-react-native';
+import { currencyManager } from '@/lib/currency';
+import { loadHotelSettings } from '@/lib/storage';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 
 type Booking = Database['public']['Tables']['bookings']['Row'];
 type Order = Database['public']['Tables']['orders']['Row'];
@@ -56,9 +61,11 @@ export default function Accounting() {
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'year'>('month');
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(30));
+  const [hotelSettings, setHotelSettings] = useState<any>(null);
 
   useEffect(() => {
     loadFinancialData();
+    loadSettings();
     
     // Entrance animations
     Animated.parallel([
@@ -75,55 +82,53 @@ export default function Accounting() {
     ]).start();
   }, [selectedPeriod]);
 
+  const loadSettings = async () => {
+    try {
+      const settings = await loadHotelSettings();
+      setHotelSettings(settings);
+      if (settings?.currency) {
+        currencyManager.setCurrency(settings.currency);
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  };
+
   const loadFinancialData = async () => {
     try {
       const now = new Date();
       const startDate = getStartDate(now, selectedPeriod);
 
-      // Load bookings revenue
-      const { data: bookings, error: bookingsError } = await supabase
-        .from('bookings')
-        .select('*')
-        .gte('created_at', startDate.toISOString())
-        .eq('payment_status', 'paid');
-
-      if (bookingsError) throw bookingsError;
-
-      // Load orders revenue
-      const { data: orders, error: ordersError } = await supabase
-        .from('orders')
-        .select('*')
-        .gte('created_at', startDate.toISOString())
-        .eq('payment_status', 'paid');
-
-      if (ordersError) throw ordersError;
-
-      // Load expenses
-      const { data: expensesData, error: expensesError } = await supabase
-        .from('expenses')
-        .select('*')
-        .gte('date', startDate.toISOString().split('T')[0])
-        .order('date', { ascending: false });
-
-      if (expensesError) throw expensesError;
+      // Load data from local database
+      const [bookings, orders, transactions] = await Promise.all([
+        db.select<Booking>('bookings', { 
+          filters: { payment_status: 'paid' }
+        }),
+        db.select<Order>('orders', { 
+          filters: { payment_status: 'paid' }
+        }),
+        db.select('transactions')
+      ]);
 
       // Calculate financial metrics
-      const roomRevenue = bookings?.reduce((sum, booking) => sum + booking.total_amount, 0) || 0;
+      const roomRevenue = bookings.reduce((sum, booking) => sum + booking.total_amount, 0);
       
-      const foodOrders = orders?.filter(order => order.order_type === 'restaurant') || [];
-      const barOrders = orders?.filter(order => order.order_type === 'bar') || [];
+      const foodOrders = orders.filter(order => order.order_type === 'restaurant');
+      const barOrders = orders.filter(order => order.order_type === 'bar');
       
       const foodRevenue = foodOrders.reduce((sum, order) => sum + order.total_amount, 0);
       const barRevenue = barOrders.reduce((sum, order) => sum + order.total_amount, 0);
       
       const totalRevenue = roomRevenue + foodRevenue + barRevenue;
-      const totalExpenses = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+      const totalExpenses = transactions
+        .filter(t => t.type === 'expense')
+        .reduce((sum, t) => sum + t.amount, 0);
       const netProfit = totalRevenue - totalExpenses;
 
       // Calculate additional metrics
       const daysInPeriod = getDaysInPeriod(selectedPeriod);
       const dailyRevenue = totalRevenue / daysInPeriod;
-      const avgDailyRate = bookings && bookings.length > 0 ? roomRevenue / bookings.length : 0;
+      const avgDailyRate = bookings.length > 0 ? roomRevenue / bookings.length : 0;
 
       setFinancialData({
         totalRevenue,
@@ -140,24 +145,24 @@ export default function Accounting() {
 
       // Prepare recent transactions
       const transactions = [
-        ...bookings?.map(booking => ({
+        ...bookings.map(booking => ({
           id: booking.id,
           type: 'Room Booking',
           amount: booking.total_amount,
           date: booking.created_at,
           description: `${booking.guest_name} - Room booking`,
-        })) || [],
-        ...orders?.map(order => ({
+        })),
+        ...orders.map(order => ({
           id: order.id,
           type: order.order_type === 'restaurant' ? 'Restaurant' : 'Bar',
           amount: order.total_amount,
           date: order.created_at,
           description: `${order.order_type} order`,
-        })) || [],
+        })),
       ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       setRecentTransactions(transactions.slice(0, 10));
-      setExpenses(expensesData || []);
+      setExpenses([]);
 
     } catch (error) {
       console.error('Error loading financial data:', error);
@@ -200,19 +205,163 @@ export default function Accounting() {
     setRefreshing(false);
   }, [selectedPeriod]);
 
-  const generateReport = () => {
-    Alert.alert(
-      'Generate Report',
-      'Financial report generation will be implemented with PDF export functionality.',
-      [{ text: 'OK' }]
-    );
+  const generateReport = async () => {
+    try {
+      const reportHtml = generateFinancialReportHTML();
+      
+      const { uri } = await Print.printToFileAsync({
+        html: reportHtml,
+        base64: false,
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Financial Report',
+        });
+      }
+    } catch (error) {
+      console.error('Error generating report:', error);
+      Alert.alert('Error', 'Failed to generate financial report');
+    }
+  };
+
+  const generateFinancialReportHTML = () => {
+    const formatCurrency = (amount: number) => {
+      return currencyManager.formatAmount(amount, hotelSettings?.currency);
+    };
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Financial Report</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; }
+          .header { text-align: center; margin-bottom: 30px; }
+          .hotel-name { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+          .report-title { font-size: 18px; color: #666; }
+          .section { margin-bottom: 30px; }
+          .section-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #333; padding-bottom: 5px; }
+          .metric-row { display: flex; justify-content: space-between; margin-bottom: 10px; padding: 5px 0; }
+          .metric-label { font-weight: bold; }
+          .metric-value { text-align: right; }
+          .total-row { border-top: 2px solid #333; padding-top: 10px; font-weight: bold; font-size: 18px; }
+          .positive { color: #16a34a; }
+          .negative { color: #ef4444; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="hotel-name">${hotelSettings?.hotelName || 'Grand Hotel'}</div>
+          <div class="report-title">Financial Report - ${selectedPeriod.charAt(0).toUpperCase() + selectedPeriod.slice(1)}</div>
+          <div>Generated: ${new Date().toLocaleDateString()}</div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Revenue Summary</div>
+          <div class="metric-row">
+            <span class="metric-label">Room Revenue:</span>
+            <span class="metric-value">${formatCurrency(financialData.roomRevenue)}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Food Revenue:</span>
+            <span class="metric-value">${formatCurrency(financialData.foodRevenue)}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Bar Revenue:</span>
+            <span class="metric-value">${formatCurrency(financialData.barRevenue)}</span>
+          </div>
+          <div class="metric-row total-row">
+            <span class="metric-label">Total Revenue:</span>
+            <span class="metric-value positive">${formatCurrency(financialData.totalRevenue)}</span>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Expense Summary</div>
+          <div class="metric-row">
+            <span class="metric-label">Total Expenses:</span>
+            <span class="metric-value negative">${formatCurrency(financialData.totalExpenses)}</span>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Profitability</div>
+          <div class="metric-row total-row">
+            <span class="metric-label">Net Profit:</span>
+            <span class="metric-value ${financialData.netProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(financialData.netProfit)}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Profit Margin:</span>
+            <span class="metric-value">${financialData.totalRevenue > 0 ? ((financialData.netProfit / financialData.totalRevenue) * 100).toFixed(1) : '0'}%</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Average Daily Revenue:</span>
+            <span class="metric-value">${formatCurrency(financialData.dailyRevenue)}</span>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  };
+
+  const exportToExcel = async () => {
+    try {
+      // Create CSV data for Excel export
+      const csvData = [
+        ['Financial Report', hotelSettings?.hotelName || 'Grand Hotel'],
+        ['Period', selectedPeriod.charAt(0).toUpperCase() + selectedPeriod.slice(1)],
+        ['Generated', new Date().toLocaleDateString()],
+        [''],
+        ['Revenue Summary'],
+        ['Room Revenue', financialData.roomRevenue],
+        ['Food Revenue', financialData.foodRevenue],
+        ['Bar Revenue', financialData.barRevenue],
+        ['Total Revenue', financialData.totalRevenue],
+        [''],
+        ['Expenses'],
+        ['Total Expenses', financialData.totalExpenses],
+        [''],
+        ['Profitability'],
+        ['Net Profit', financialData.netProfit],
+        ['Profit Margin %', financialData.totalRevenue > 0 ? ((financialData.netProfit / financialData.totalRevenue) * 100).toFixed(1) : '0'],
+        ['Average Daily Revenue', financialData.dailyRevenue],
+      ];
+
+      const csvContent = csvData.map(row => row.join(',')).join('\n');
+      
+      if (typeof window !== 'undefined') {
+        // Web download
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Financial_Report_${selectedPeriod}_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        Alert.alert('Success', 'Financial report exported successfully!');
+      } else {
+        // Mobile export
+        const fileUri = FileSystem.documentDirectory + `Financial_Report_${selectedPeriod}.csv`;
+        await FileSystem.writeAsStringAsync(fileUri, csvContent);
+        
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri);
+        }
+      }
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      Alert.alert('Error', 'Failed to export financial report');
+    }
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
+    return currencyManager.formatAmount(amount, hotelSettings?.currency);
   };
 
   const getRevenueBreakdown = () => {
@@ -576,26 +725,46 @@ export default function Accounting() {
           <View style={styles.exportOptions}>
             <TouchableOpacity style={styles.exportButton} onPress={generateReport}>
               <FileText size={20} color="#1e3a8a" />
-              <Text style={styles.exportButtonText}>Financial Report (PDF)</Text>
+              <Text style={styles.exportButtonText}>Generate PDF Report</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.exportButton}
+              onPress={exportToExcel}
+            >
+              <Download size={20} color="#059669" />
+              <Text style={styles.exportButtonText}>Export to Excel</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
               style={styles.exportButton} 
               onPress={() => {
-                // Show template download modal
-                Alert.alert('Template Download', 'Financial template download functionality is available in the Menu Management and Store Management sections.');
+                Alert.alert(
+                  'Revenue Analysis',
+                  `Revenue Breakdown:\n\nRoom Revenue: ${formatCurrency(financialData.roomRevenue)} (${breakdown.room.toFixed(1)}%)\nFood Revenue: ${formatCurrency(financialData.foodRevenue)} (${breakdown.food.toFixed(1)}%)\nBar Revenue: ${formatCurrency(financialData.barRevenue)} (${breakdown.bar.toFixed(1)}%)\n\nTotal: ${formatCurrency(financialData.totalRevenue)}`,
+                  [{ text: 'OK' }]
+                );
               }}
             >
-              <Download size={20} color="#059669" />
-              <Text style={styles.exportButtonText}>Download Templates</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.exportButton} onPress={generateReport}>
               <PieChart size={20} color="#16a34a" />
               <Text style={styles.exportButtonText}>Revenue Analysis</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.exportButton} onPress={generateReport}>
+            <TouchableOpacity 
+              style={styles.exportButton} 
+              onPress={() => {
+                const paymentSummary = recentTransactions.reduce((acc, transaction) => {
+                  acc[transaction.type] = (acc[transaction.type] || 0) + transaction.amount;
+                  return acc;
+                }, {} as Record<string, number>);
+                
+                const summaryText = Object.entries(paymentSummary)
+                  .map(([type, amount]) => `${type}: ${formatCurrency(amount)}`)
+                  .join('\n');
+                
+                Alert.alert('Payment Summary', summaryText || 'No payments in selected period', [{ text: 'OK' }]);
+              }}
+            >
               <CreditCard size={20} color="#7c3aed" />
               <Text style={styles.exportButtonText}>Payment Summary</Text>
             </TouchableOpacity>
