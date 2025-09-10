@@ -26,6 +26,31 @@ export default function Rooms() {
   const [filterStatus, setFilterStatus] = useState<Room['status'] | 'all'>('all');
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [newRoomModal, setNewRoomModal] = useState(false);
+
+  const [newRoom, setNewRoom] = useState({
+    room_number: '',
+    room_type: 'standard' as Room['room_type'],
+    price_per_night: 0,
+    floor: 1,
+    max_occupancy: 2,
+    description: '',
+    bed_size: 'queen',
+    facilities: {
+      air_conditioner: false,
+      television: false,
+      internet: false,
+      wardrobe: false,
+      reading_table_chair: false,
+      fan: false,
+      mini_bar: false,
+      balcony: false,
+      kitchen: false,
+      jacuzzi: false,
+      safe: false,
+      coffee_maker: false,
+    },
+  });
 
   useEffect(() => {
     loadRooms();
@@ -53,6 +78,81 @@ export default function Rooms() {
     } catch (error) {
       console.error('Error updating room status:', error);
       Alert.alert('Error', 'Failed to update room status');
+    }
+  };
+
+  const createRoom = async () => {
+    if (!newRoom.room_number || newRoom.price_per_night <= 0) {
+      Alert.alert('Error', 'Please fill in room number and price');
+      return;
+    }
+
+    // Check if room number already exists
+    const existingRoom = rooms.find(r => r.room_number === newRoom.room_number);
+    if (existingRoom) {
+      Alert.alert('Error', 'Room number already exists');
+      return;
+    }
+
+    try {
+      // Convert facilities to amenities array
+      const amenities = [];
+      if (newRoom.facilities.air_conditioner) amenities.push('Air Conditioning');
+      if (newRoom.facilities.television) amenities.push('Television');
+      if (newRoom.facilities.internet) amenities.push('WiFi Internet');
+      if (newRoom.facilities.wardrobe) amenities.push('Wardrobe');
+      if (newRoom.facilities.reading_table_chair) amenities.push('Reading Table & Chair');
+      if (newRoom.facilities.fan) amenities.push('Ceiling Fan');
+      if (newRoom.facilities.mini_bar) amenities.push('Mini Bar');
+      if (newRoom.facilities.balcony) amenities.push('Balcony');
+      if (newRoom.facilities.kitchen) amenities.push('Kitchen');
+      if (newRoom.facilities.jacuzzi) amenities.push('Jacuzzi');
+      if (newRoom.facilities.safe) amenities.push('Safe');
+      if (newRoom.facilities.coffee_maker) amenities.push('Coffee Maker');
+      
+      // Add bed size to amenities
+      amenities.push(`${newRoom.bed_size.charAt(0).toUpperCase() + newRoom.bed_size.slice(1)} Size Bed`);
+
+      await db.insert<Room>('rooms', {
+        room_number: newRoom.room_number,
+        room_type: newRoom.room_type,
+        status: 'available',
+        price_per_night: newRoom.price_per_night,
+        amenities,
+        floor: newRoom.floor,
+        max_occupancy: newRoom.max_occupancy,
+        description: newRoom.description,
+      });
+
+      Alert.alert('Success', 'Room created successfully');
+      setNewRoomModal(false);
+      setNewRoom({
+        room_number: '',
+        room_type: 'standard',
+        price_per_night: 0,
+        floor: 1,
+        max_occupancy: 2,
+        description: '',
+        bed_size: 'queen',
+        facilities: {
+          air_conditioner: false,
+          television: false,
+          internet: false,
+          wardrobe: false,
+          reading_table_chair: false,
+          fan: false,
+          mini_bar: false,
+          balcony: false,
+          kitchen: false,
+          jacuzzi: false,
+          safe: false,
+          coffee_maker: false,
+        },
+      });
+      loadRooms();
+    } catch (error) {
+      console.error('Error creating room:', error);
+      Alert.alert('Error', 'Failed to create room');
     }
   };
 
@@ -106,6 +206,7 @@ export default function Rooms() {
           <View style={styles.headerRight}>
             <TouchableOpacity style={styles.addButton}>
               <Plus size={20} color="#ffffff" />
+              onPress={() => setNewRoomModal(true)}
               <Text style={styles.addButtonText}>Add Room</Text>
             </TouchableOpacity>
           </View>
@@ -336,6 +437,189 @@ export default function Rooms() {
                 </ScrollView>
               </>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* New Room Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={newRoomModal}
+        onRequestClose={() => setNewRoomModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add New Room</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setNewRoomModal(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Room Number *</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={newRoom.room_number}
+                  onChangeText={(text) => setNewRoom({ ...newRoom, room_number: text })}
+                  placeholder="e.g., 101, 205, A12"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Room Type *</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.roomTypeSelector}>
+                  {['standard', 'deluxe', 'suite', 'presidential', 'family', 'executive'].map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.roomTypeOption,
+                        newRoom.room_type === type && styles.roomTypeOptionActive,
+                      ]}
+                      onPress={() => setNewRoom({ ...newRoom, room_type: type as Room['room_type'] })}
+                    >
+                      <Text style={[
+                        styles.roomTypeText,
+                        newRoom.room_type === type && styles.roomTypeTextActive,
+                      ]}>
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.formRow}>
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Price per Night *</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={newRoom.price_per_night.toString()}
+                    onChangeText={(text) => setNewRoom({ ...newRoom, price_per_night: Number(text) || 0 })}
+                    placeholder="0.00"
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Floor</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={newRoom.floor.toString()}
+                    onChangeText={(text) => setNewRoom({ ...newRoom, floor: Number(text) || 1 })}
+                    placeholder="1"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formRow}>
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Max Occupancy</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={newRoom.max_occupancy.toString()}
+                    onChangeText={(text) => setNewRoom({ ...newRoom, max_occupancy: Number(text) || 2 })}
+                    placeholder="2"
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Bed Size</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bedSizeSelector}>
+                    {['single', 'twin', 'full', 'queen', 'king', 'california_king'].map((size) => (
+                      <TouchableOpacity
+                        key={size}
+                        style={[
+                          styles.bedSizeOption,
+                          newRoom.bed_size === size && styles.bedSizeOptionActive,
+                        ]}
+                        onPress={() => setNewRoom({ ...newRoom, bed_size: size })}
+                      >
+                        <Text style={[
+                          styles.bedSizeText,
+                          newRoom.bed_size === size && styles.bedSizeTextActive,
+                        ]}>
+                          {size.replace('_', ' ').charAt(0).toUpperCase() + size.replace('_', ' ').slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Room Description</Text>
+                <TextInput
+                  style={[styles.formInput, styles.textArea]}
+                  value={newRoom.description}
+                  onChangeText={(text) => setNewRoom({ ...newRoom, description: text })}
+                  placeholder="Describe the room features and ambiance..."
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Room Facilities</Text>
+                <View style={styles.facilitiesGrid}>
+                  {Object.entries(newRoom.facilities).map(([facility, enabled]) => (
+                    <TouchableOpacity
+                      key={facility}
+                      style={[
+                        styles.facilityOption,
+                        enabled && styles.facilityOptionActive,
+                      ]}
+                      onPress={() => setNewRoom({
+                        ...newRoom,
+                        facilities: {
+                          ...newRoom.facilities,
+                          [facility]: !enabled,
+                        }
+                      })}
+                    >
+                      <View style={styles.facilityContent}>
+                        <Text style={styles.facilityIcon}>
+                          {facility === 'air_conditioner' && '❄️'}
+                          {facility === 'television' && '📺'}
+                          {facility === 'internet' && '📶'}
+                          {facility === 'wardrobe' && '👔'}
+                          {facility === 'reading_table_chair' && '🪑'}
+                          {facility === 'fan' && '🌀'}
+                          {facility === 'mini_bar' && '🍷'}
+                          {facility === 'balcony' && '🏞️'}
+                          {facility === 'kitchen' && '🍳'}
+                          {facility === 'jacuzzi' && '🛁'}
+                          {facility === 'safe' && '🔒'}
+                          {facility === 'coffee_maker' && '☕'}
+                        </Text>
+                        <Text style={[
+                          styles.facilityText,
+                          enabled && styles.facilityTextActive,
+                        ]}>
+                          {facility.replace('_', ' ').charAt(0).toUpperCase() + facility.replace('_', ' ').slice(1)}
+                        </Text>
+                        {enabled && (
+                          <View style={styles.facilityCheck}>
+                            <Text style={styles.facilityCheckText}>✓</Text>
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.createRoomButton} onPress={createRoom}>
+                <Text style={styles.createRoomButtonText}>Create Room</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -654,5 +938,141 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Bold',
     color: '#1e293b',
     marginBottom: 16,
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  formRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  formInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    backgroundColor: '#fafafa',
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  roomTypeSelector: {
+    flexDirection: 'row',
+  },
+  roomTypeOption: {
+    marginRight: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f8fafc',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  roomTypeOptionActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  roomTypeText: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: '#64748b',
+  },
+  roomTypeTextActive: {
+    color: 'white',
+  },
+  bedSizeSelector: {
+    flexDirection: 'row',
+  },
+  bedSizeOption: {
+    marginRight: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  bedSizeOptionActive: {
+    backgroundColor: '#7c3aed',
+    borderColor: '#7c3aed',
+  },
+  bedSizeText: {
+    fontSize: 11,
+    fontFamily: 'Inter-SemiBold',
+    color: '#64748b',
+  },
+  bedSizeTextActive: {
+    color: 'white',
+  },
+  facilitiesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  facilityOption: {
+    width: '48%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  facilityOptionActive: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#2563eb',
+  },
+  facilityContent: {
+    alignItems: 'center',
+    position: 'relative',
+  },
+  facilityIcon: {
+    fontSize: 24,
+    marginBottom: 6,
+  },
+  facilityText: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  facilityTextActive: {
+    color: '#2563eb',
+  },
+  facilityCheck: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    backgroundColor: '#10b981',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  facilityCheckText: {
+    color: 'white',
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+  },
+  createRoomButton: {
+    backgroundColor: '#2563eb',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  createRoomButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
   },
 });
