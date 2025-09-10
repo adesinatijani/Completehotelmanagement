@@ -667,33 +667,23 @@ export default function Bar() {
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
               <View style={styles.topButtons}>
-                <TouchableOpacity style={styles.actionButton}>
+                <TouchableOpacity style={styles.actionButton} onPress={handleNoReceipt}>
                   <LinearGradient
                     colors={['#95a5a6', '#7f8c8d']}
                     style={styles.actionButtonGradient}
                   >
-                    <TouchableOpacity 
-                      style={styles.actionButtonTouch}
-                      onPress={handleNoReceipt}
-                    >
                       <Receipt size={16} color="#fff" />
                       <Text style={styles.actionButtonText}>NO RECEIPT</Text>
-                    </TouchableOpacity>
                   </LinearGradient>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.actionButton}>
+                <TouchableOpacity style={styles.actionButton} onPress={handleSaveOrder}>
                   <LinearGradient
                     colors={['#3498db', '#2980b9']}
                     style={styles.actionButtonGradient}
                   >
-                    <TouchableOpacity 
-                      style={styles.actionButtonTouch}
-                      onPress={handleSaveOrder}
-                    >
                       <Clock size={16} color="#fff" />
                       <Text style={styles.actionButtonText}>SAVE</Text>
-                    </TouchableOpacity>
                   </LinearGradient>
                 </TouchableOpacity>
 
@@ -724,48 +714,33 @@ export default function Bar() {
               </View>
 
               <View style={styles.bottomButtons}>
-                <TouchableOpacity style={styles.paymentButton}>
+                <TouchableOpacity style={styles.paymentButton} onPress={handleCashPayment}>
                   <LinearGradient
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
                   >
-                    <TouchableOpacity 
-                      style={styles.paymentButtonTouch}
-                      onPress={handleCashPayment}
-                    >
                       <DollarSign size={16} color="#fff" />
                       <Text style={styles.paymentButtonText}>CASH</Text>
-                    </TouchableOpacity>
                   </LinearGradient>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.paymentButton}>
+                <TouchableOpacity style={styles.paymentButton} onPress={handleCreditPayment}>
                   <LinearGradient
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
                   >
-                    <TouchableOpacity 
-                      style={styles.paymentButtonTouch}
-                      onPress={handleCreditPayment}
-                    >
                       <CreditCard size={16} color="#fff" />
                       <Text style={styles.paymentButtonText}>CREDIT</Text>
-                    </TouchableOpacity>
                   </LinearGradient>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.paymentButton}>
+                <TouchableOpacity style={styles.paymentButton} onPress={handleSettle}>
                   <LinearGradient
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
                   >
-                    <TouchableOpacity 
-                      style={styles.paymentButtonTouch}
-                      onPress={handleSettle}
-                    >
                       <Settings size={16} color="#fff" />
                       <Text style={styles.paymentButtonText}>SETTLE</Text>
-                    </TouchableOpacity>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
