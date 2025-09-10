@@ -144,7 +144,7 @@ export default function Accounting() {
       });
 
       // Prepare recent transactions
-      const transactions = [
+      const recentTransactionsList = [
         ...bookings.map(booking => ({
           id: booking.id,
           type: 'Room Booking',
@@ -161,7 +161,7 @@ export default function Accounting() {
         })),
       ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-      setRecentTransactions(transactions.slice(0, 10));
+      setRecentTransactions(recentTransactionsList.slice(0, 10));
       setExpenses([]);
 
     } catch (error) {
