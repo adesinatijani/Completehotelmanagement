@@ -667,28 +667,24 @@ export default function Bar() {
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
               <View style={styles.topButtons}>
-                <TouchableOpacity style={styles.actionButton} onPress={handleNoReceipt}>
-                  <LinearGradient
-                    colors={['#95a5a6', '#7f8c8d']}
-                    style={styles.actionButtonGradient}
-                  >
-                    <Receipt size={16} color="#fff" />
-                    <Text style={styles.actionButtonText}>NO RECEIPT</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.actionButton} onPress={handleSaveOrder}>
-                  <LinearGradient
-                    colors={['#3498db', '#2980b9']}
-                    style={styles.actionButtonGradient}
-                  >
-                    <Clock size={16} color="#fff" />
-                    <Text style={styles.actionButtonText}>SAVE</Text>
-                  </LinearGradient>
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#95a5a6' }]} 
+                  onPress={handleNoReceipt}
+                >
+                  <Receipt size={16} color="#fff" />
+                  <Text style={styles.actionButtonText}>NO RECEIPT</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity 
-                  style={styles.actionButton}
+                  style={[styles.actionButton, { backgroundColor: '#3498db' }]} 
+                  onPress={handleSaveOrder}
+                >
+                  <Clock size={16} color="#fff" />
+                  <Text style={styles.actionButtonText}>SAVE</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: cart.length > 0 ? '#27ae60' : '#95a5a6' }]}
                   onPress={() => {
                     if (cart.length === 0) {
                       Alert.alert('Error', 'Cart is empty');
@@ -702,46 +698,35 @@ export default function Bar() {
                   }}
                   disabled={cart.length === 0}
                 >
-                  <LinearGradient
-                    colors={cart.length > 0 ? ['#27ae60', '#229954'] : ['#95a5a6', '#7f8c8d']}
-                    style={styles.actionButtonGradient}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      {orderPlaced ? 'ORDER PLACED' : 'ORDER'}
-                    </Text>
-                  </LinearGradient>
+                  <Text style={styles.actionButtonText}>
+                    {orderPlaced ? 'ORDER PLACED' : 'ORDER'}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.bottomButtons}>
-                <TouchableOpacity style={styles.paymentButton} onPress={handleCashPayment}>
-                  <LinearGradient
-                    colors={['#2c3e50', '#34495e']}
-                    style={styles.paymentButtonGradient}
-                  >
-                    <DollarSign size={16} color="#fff" />
-                    <Text style={styles.paymentButtonText}>CASH</Text>
-                  </LinearGradient>
+                <TouchableOpacity 
+                  style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]} 
+                  onPress={handleCashPayment}
+                >
+                  <DollarSign size={16} color="#fff" />
+                  <Text style={styles.paymentButtonText}>CASH</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.paymentButton} onPress={handleCreditPayment}>
-                  <LinearGradient
-                    colors={['#2c3e50', '#34495e']}
-                    style={styles.paymentButtonGradient}
-                  >
-                    <CreditCard size={16} color="#fff" />
-                    <Text style={styles.paymentButtonText}>CREDIT</Text>
-                  </LinearGradient>
+                <TouchableOpacity 
+                  style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]} 
+                  onPress={handleCreditPayment}
+                >
+                  <CreditCard size={16} color="#fff" />
+                  <Text style={styles.paymentButtonText}>CREDIT</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.paymentButton} onPress={handleSettle}>
-                  <LinearGradient
-                    colors={['#2c3e50', '#34495e']}
-                    style={styles.paymentButtonGradient}
-                  >
-                    <Settings size={16} color="#fff" />
-                    <Text style={styles.paymentButtonText}>SETTLE</Text>
-                  </LinearGradient>
+                <TouchableOpacity 
+                  style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]} 
+                  onPress={handleSettle}
+                >
+                  <Settings size={16} color="#fff" />
+                  <Text style={styles.paymentButtonText}>SETTLE</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1037,24 +1022,6 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    height: 48,
-    borderRadius: 6,
-  },
-  actionButtonGradient: {
-    flex: 1,
-    borderRadius: 6,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-  },
-  actionButtonTouch: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-  },
   actionButtonText: {
     fontSize: 12,
     fontFamily: 'Inter-Bold',
@@ -1067,10 +1034,6 @@ const styles = StyleSheet.create({
   paymentButton: {
     flex: 1,
     height: 48,
-    borderRadius: 6,
-  },
-  paymentButtonGradient: {
-    flex: 1,
     borderRadius: 6,
     flexDirection: 'row',
     justifyContent: 'center',
