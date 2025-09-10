@@ -674,8 +674,8 @@ export default function Restaurant() {
                     colors={['#95a5a6', '#7f8c8d']}
                     style={styles.actionButtonGradient}
                   >
-                      <Receipt size={16} color="#fff" />
-                      <Text style={styles.actionButtonText}>NO RECEIPT</Text>
+                    <Receipt size={16} color="#fff" />
+                    <Text style={styles.actionButtonText}>NO RECEIPT</Text>
                   </LinearGradient>
                 </TouchableOpacity>
 
@@ -684,8 +684,8 @@ export default function Restaurant() {
                     colors={['#3498db', '#2980b9']}
                     style={styles.actionButtonGradient}
                   >
-                      <Clock size={16} color="#fff" />
-                      <Text style={styles.actionButtonText}>SAVE</Text>
+                    <Clock size={16} color="#fff" />
+                    <Text style={styles.actionButtonText}>SAVE</Text>
                   </LinearGradient>
                 </TouchableOpacity>
 
@@ -721,8 +721,8 @@ export default function Restaurant() {
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
                   >
-                      <DollarSign size={16} color="#fff" />
-                      <Text style={styles.paymentButtonText}>CASH</Text>
+                    <DollarSign size={16} color="#fff" />
+                    <Text style={styles.paymentButtonText}>CASH</Text>
                   </LinearGradient>
                 </TouchableOpacity>
 
@@ -731,8 +731,8 @@ export default function Restaurant() {
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
                   >
-                      <CreditCard size={16} color="#fff" />
-                      <Text style={styles.paymentButtonText}>CREDIT</Text>
+                    <CreditCard size={16} color="#fff" />
+                    <Text style={styles.paymentButtonText}>CREDIT</Text>
                   </LinearGradient>
                 </TouchableOpacity>
 
@@ -741,8 +741,8 @@ export default function Restaurant() {
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
                   >
-                      <Settings size={16} color="#fff" />
-                      <Text style={styles.paymentButtonText}>SETTLE</Text>
+                    <Settings size={16} color="#fff" />
+                    <Text style={styles.paymentButtonText}>SETTLE</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
