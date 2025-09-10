@@ -377,6 +377,236 @@ export default function Accounting() {
 
   const breakdown = getRevenueBreakdown();
 
+  const generateRevenueAnalysis = async () => {
+    try {
+      const analysisHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Revenue Analysis Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .hotel-name { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+            .report-title { font-size: 18px; color: #666; margin-bottom: 20px; }
+            .breakdown-section { margin-bottom: 30px; }
+            .breakdown-item { display: flex; justify-content: space-between; margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px; }
+            .breakdown-label { font-weight: bold; }
+            .breakdown-amount { color: #16a34a; font-weight: bold; }
+            .breakdown-percentage { color: #666; }
+            .chart-placeholder { text-align: center; padding: 40px; border: 2px dashed #ccc; margin: 20px 0; }
+            .total-section { border-top: 2px solid #333; padding-top: 15px; font-size: 18px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="hotel-name">${hotelSettings?.hotelName || 'Grand Hotel'}</div>
+            <div class="report-title">Revenue Analysis Report</div>
+            <div>Period: ${selectedPeriod.charAt(0).toUpperCase() + selectedPeriod.slice(1)}</div>
+            <div>Generated: ${new Date().toLocaleDateString()}</div>
+          </div>
+
+          <div class="breakdown-section">
+            <h3>Revenue Breakdown</h3>
+            
+            <div class="breakdown-item">
+              <span class="breakdown-label">🏨 Room Revenue</span>
+              <div>
+                <span class="breakdown-amount">${formatCurrency(financialData.roomRevenue)}</span>
+                <span class="breakdown-percentage"> (${breakdown.room.toFixed(1)}%)</span>
+              </div>
+            </div>
+            
+            <div class="breakdown-item">
+              <span class="breakdown-label">🍽️ Restaurant Revenue</span>
+              <div>
+                <span class="breakdown-amount">${formatCurrency(financialData.foodRevenue)}</span>
+                <span class="breakdown-percentage"> (${breakdown.food.toFixed(1)}%)</span>
+              </div>
+            </div>
+            
+            <div class="breakdown-item">
+              <span class="breakdown-label">🍷 Bar Revenue</span>
+              <div>
+                <span class="breakdown-amount">${formatCurrency(financialData.barRevenue)}</span>
+                <span class="breakdown-percentage"> (${breakdown.bar.toFixed(1)}%)</span>
+              </div>
+            </div>
+            
+            <div class="breakdown-item total-section">
+              <span class="breakdown-label">💰 Total Revenue</span>
+              <span class="breakdown-amount">${formatCurrency(financialData.totalRevenue)}</span>
+            </div>
+          </div>
+
+          <div class="chart-placeholder">
+            <h4>Revenue Distribution Chart</h4>
+            <p>Room: ${breakdown.room.toFixed(1)}% | Food: ${breakdown.food.toFixed(1)}% | Bar: ${breakdown.bar.toFixed(1)}%</p>
+          </div>
+
+          <div class="breakdown-section">
+            <h3>Performance Metrics</h3>
+            <div class="breakdown-item">
+              <span class="breakdown-label">Average Daily Revenue</span>
+              <span class="breakdown-amount">${formatCurrency(financialData.dailyRevenue)}</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="breakdown-label">Average Daily Rate (ADR)</span>
+              <span class="breakdown-amount">${formatCurrency(financialData.avgDailyRate)}</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="breakdown-label">Profit Margin</span>
+              <span class="breakdown-amount">${financialData.totalRevenue > 0 ? ((financialData.netProfit / financialData.totalRevenue) * 100).toFixed(1) : '0'}%</span>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      if (Platform.OS === 'web') {
+        // Web: Open print dialog for PDF generation
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(analysisHtml);
+          printWindow.document.close();
+          printWindow.focus();
+          printWindow.print();
+          printWindow.close();
+        }
+      } else {
+        // Mobile: Generate PDF and share
+        const { uri } = await Print.printToFileAsync({
+          html: analysisHtml,
+          base64: false,
+        });
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Revenue Analysis Report',
+          });
+        }
+      }
+
+      Alert.alert('Success', 'Revenue analysis report generated successfully!');
+    } catch (error) {
+      console.error('Error generating revenue analysis:', error);
+      Alert.alert('Error', 'Failed to generate revenue analysis report');
+    }
+  };
+
+  const generatePaymentSummary = async () => {
+    try {
+      const paymentSummary = recentTransactions.reduce((acc, transaction) => {
+        acc[transaction.type] = (acc[transaction.type] || 0) + transaction.amount;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const paymentMethods = recentTransactions.reduce((acc, transaction) => {
+        const method = 'Card Payment'; // Default since we don't have payment method in transaction data
+        acc[method] = (acc[method] || 0) + transaction.amount;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const summaryHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Payment Summary Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .hotel-name { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+            .report-title { font-size: 18px; color: #666; margin-bottom: 20px; }
+            .summary-section { margin-bottom: 30px; }
+            .summary-item { display: flex; justify-content: space-between; margin-bottom: 10px; padding: 10px; background: #f5f5f5; border-radius: 5px; }
+            .summary-label { font-weight: bold; }
+            .summary-amount { color: #16a34a; font-weight: bold; }
+            .total-section { border-top: 2px solid #333; padding-top: 15px; font-size: 18px; font-weight: bold; }
+            .transaction-list { margin-top: 20px; }
+            .transaction-item { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #eee; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="hotel-name">${hotelSettings?.hotelName || 'Grand Hotel'}</div>
+            <div class="report-title">Payment Summary Report</div>
+            <div>Period: ${selectedPeriod.charAt(0).toUpperCase() + selectedPeriod.slice(1)}</div>
+            <div>Generated: ${new Date().toLocaleDateString()}</div>
+          </div>
+
+          <div class="summary-section">
+            <h3>Payment by Revenue Type</h3>
+            ${Object.entries(paymentSummary).map(([type, amount]) => `
+              <div class="summary-item">
+                <span class="summary-label">${type}</span>
+                <span class="summary-amount">${formatCurrency(amount)}</span>
+              </div>
+            `).join('')}
+            
+            <div class="summary-item total-section">
+              <span class="summary-label">Total Payments</span>
+              <span class="summary-amount">${formatCurrency(Object.values(paymentSummary).reduce((sum, amount) => sum + amount, 0))}</span>
+            </div>
+          </div>
+
+          <div class="summary-section">
+            <h3>Payment Methods</h3>
+            ${Object.entries(paymentMethods).map(([method, amount]) => `
+              <div class="summary-item">
+                <span class="summary-label">${method}</span>
+                <span class="summary-amount">${formatCurrency(amount)}</span>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="transaction-list">
+            <h3>Recent Transactions (${recentTransactions.length})</h3>
+            ${recentTransactions.slice(0, 10).map(transaction => `
+              <div class="transaction-item">
+                <span>${transaction.description}</span>
+                <span>${formatCurrency(transaction.amount)}</span>
+              </div>
+            `).join('')}
+          </div>
+        </body>
+        </html>
+      `;
+
+      if (Platform.OS === 'web') {
+        // Web: Open print dialog for PDF generation
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(summaryHtml);
+          printWindow.document.close();
+          printWindow.focus();
+          printWindow.print();
+          printWindow.close();
+        }
+      } else {
+        // Mobile: Generate PDF and share
+        const { uri } = await Print.printToFileAsync({
+          html: summaryHtml,
+          base64: false,
+        });
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Payment Summary Report',
+          });
+        }
+      }
+
+      Alert.alert('Success', 'Payment summary report generated successfully!');
+    } catch (error) {
+      console.error('Error generating payment summary:', error);
+      Alert.alert('Error', 'Failed to generate payment summary report');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -738,13 +968,7 @@ export default function Accounting() {
 
             <TouchableOpacity 
               style={styles.exportButton} 
-              onPress={() => {
-                Alert.alert(
-                  'Revenue Analysis',
-                  `Revenue Breakdown:\n\nRoom Revenue: ${formatCurrency(financialData.roomRevenue)} (${breakdown.room.toFixed(1)}%)\nFood Revenue: ${formatCurrency(financialData.foodRevenue)} (${breakdown.food.toFixed(1)}%)\nBar Revenue: ${formatCurrency(financialData.barRevenue)} (${breakdown.bar.toFixed(1)}%)\n\nTotal: ${formatCurrency(financialData.totalRevenue)}`,
-                  [{ text: 'OK' }]
-                );
-              }}
+              onPress={generateRevenueAnalysis}
             >
               <PieChart size={20} color="#16a34a" />
               <Text style={styles.exportButtonText}>Revenue Analysis</Text>
@@ -752,18 +976,7 @@ export default function Accounting() {
 
             <TouchableOpacity 
               style={styles.exportButton} 
-              onPress={() => {
-                const paymentSummary = recentTransactions.reduce((acc, transaction) => {
-                  acc[transaction.type] = (acc[transaction.type] || 0) + transaction.amount;
-                  return acc;
-                }, {} as Record<string, number>);
-                
-                const summaryText = Object.entries(paymentSummary)
-                  .map(([type, amount]) => `${type}: ${formatCurrency(amount)}`)
-                  .join('\n');
-                
-                Alert.alert('Payment Summary', summaryText || 'No payments in selected period', [{ text: 'OK' }]);
-              }}
+              onPress={generatePaymentSummary}
             >
               <CreditCard size={20} color="#7c3aed" />
               <Text style={styles.exportButtonText}>Payment Summary</Text>
