@@ -204,9 +204,11 @@ export default function Rooms() {
             <Text style={styles.pageSubtitle}>Monitor and manage hotel rooms</Text>
           </View>
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.addButton}>
-              <Plus size={20} color="#ffffff" />
+            <TouchableOpacity 
+              style={styles.addButton}
               onPress={() => setNewRoomModal(true)}
+            >
+              <Plus size={20} color="#ffffff" />
               <Text style={styles.addButtonText}>Add Room</Text>
             </TouchableOpacity>
           </View>
