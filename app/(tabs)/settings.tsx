@@ -19,6 +19,7 @@ import { useRouter } from 'expo-router';
 import { ExcelTemplateDownloader } from '@/components/ExcelTemplateDownloader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Settings as SettingsIcon, User, Bell, Shield, Database, Wifi, Moon, Globe, CircleHelp as HelpCircle, LogOut, Save, Star, Sparkles } from 'lucide-react-native';
+import { SUPPORTED_CURRENCIES, currencyManager } from '@/lib/currency';
 
 const { width } = Dimensions.get('window');
 
@@ -40,6 +41,10 @@ export default function Settings() {
     currency: 'USD',
     timezone: 'America/New_York',
     taxRate: 8.5,
+    serviceChargeRate: 10.0,
+    language: 'en',
+    dateFormat: 'MM/DD/YYYY',
+    timeFormat: '12',
   });
 
   const [notificationSettings, setNotificationSettings] = useState({
@@ -88,8 +93,19 @@ export default function Settings() {
       // Save system settings
       await AsyncStorage.setItem('system_settings', JSON.stringify(systemSettings));
       
-      // Update the hotel name in the sidebar immediately
-      // This will trigger a re-render of the sidebar with the new name
+      // Update currency manager
+      currencyManager.setCurrency(hotelSettings.currency);
+      
+      // Trigger immediate updates across the app
+      await saveHotelSettings(hotelSettings);
+      
+      // Force sidebar refresh by updating a key
+      const event = new CustomEvent('hotelSettingsChanged', { 
+        detail: hotelSettings 
+      });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(event);
+      }
       
       Alert.alert('Success', 'Settings saved successfully! Changes are now active across the system.');
     } catch (error) {
@@ -286,11 +302,37 @@ export default function Settings() {
             <View style={styles.inputRow}>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Currency</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={hotelSettings.currency}
-                  onChangeText={(text) => setHotelSettings({ ...hotelSettings, currency: text })}
-                />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.currencySelector}>
+                  {SUPPORTED_CURRENCIES.map((currency) => (
+                    <TouchableOpacity
+                      key={currency.code}
+                      style={[
+                        styles.currencyOption,
+                        hotelSettings.currency === currency.code && styles.currencyOptionActive,
+                      ]}
+                      onPress={() => setHotelSettings({ ...hotelSettings, currency: currency.code })}
+                    >
+                      <Text style={[
+                        styles.currencySymbol,
+                        hotelSettings.currency === currency.code && styles.currencySymbolActive,
+                      ]}>
+                        {currency.symbol}
+                      </Text>
+                      <Text style={[
+                        styles.currencyCode,
+                        hotelSettings.currency === currency.code && styles.currencyCodeActive,
+                      ]}>
+                        {currency.code}
+                      </Text>
+                      <Text style={[
+                        styles.currencyName,
+                        hotelSettings.currency === currency.code && styles.currencyNameActive,
+                      ]}>
+                        {currency.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
               </View>
 
               <View style={styles.inputGroup}>
@@ -301,6 +343,52 @@ export default function Settings() {
                   onChangeText={(text) => setHotelSettings({ ...hotelSettings, taxRate: parseFloat(text) || 0 })}
                   keyboardType="numeric"
                 />
+              </View>
+            </View>
+
+            <View style={styles.inputRow}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Service Charge (%)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={hotelSettings.serviceChargeRate.toString()}
+                  onChangeText={(text) => setHotelSettings({ ...hotelSettings, serviceChargeRate: parseFloat(text) || 0 })}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Time Format</Text>
+                <View style={styles.timeFormatSelector}>
+                  <TouchableOpacity
+                    style={[
+                      styles.timeFormatOption,
+                      hotelSettings.timeFormat === '12' && styles.timeFormatOptionActive,
+                    ]}
+                    onPress={() => setHotelSettings({ ...hotelSettings, timeFormat: '12' })}
+                  >
+                    <Text style={[
+                      styles.timeFormatText,
+                      hotelSettings.timeFormat === '12' && styles.timeFormatTextActive,
+                    ]}>
+                      12 Hour
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.timeFormatOption,
+                      hotelSettings.timeFormat === '24' && styles.timeFormatOptionActive,
+                    ]}
+                    onPress={() => setHotelSettings({ ...hotelSettings, timeFormat: '24' })}
+                  >
+                    <Text style={[
+                      styles.timeFormatText,
+                      hotelSettings.timeFormat === '24' && styles.timeFormatTextActive,
+                    ]}>
+                      24 Hour
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </View>
@@ -857,5 +945,74 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#94a3b8',
     marginBottom: 2,
+  },
+  currencySelector: {
+    flexDirection: 'row',
+    maxHeight: 120,
+  },
+  currencyOption: {
+    marginRight: 12,
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  currencyOptionActive: {
+    backgroundColor: '#1e3a8a',
+    borderColor: '#1e3a8a',
+  },
+  currencySymbol: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  currencySymbolActive: {
+    color: 'white',
+  },
+  currencyCode: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#64748b',
+    marginBottom: 2,
+  },
+  currencyCodeActive: {
+    color: 'white',
+  },
+  currencyName: {
+    fontSize: 10,
+    fontFamily: 'Inter-Regular',
+    color: '#94a3b8',
+    textAlign: 'center',
+  },
+  currencyNameActive: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  timeFormatSelector: {
+    flexDirection: 'row',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 2,
+  },
+  timeFormatOption: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  timeFormatOptionActive: {
+    backgroundColor: '#1e3a8a',
+  },
+  timeFormatText: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: '#64748b',
+  },
+  timeFormatTextActive: {
+    color: 'white',
   },
 });

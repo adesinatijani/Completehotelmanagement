@@ -26,6 +26,10 @@ import {
   Settings,
   Martini
 } from 'lucide-react-native';
+import { playButtonClick, playAddToCart, playOrderComplete } from '@/lib/audio';
+import { currencyManager } from '@/lib/currency';
+import { receiptPrinter } from '@/lib/printer';
+import { loadHotelSettings } from '@/lib/storage';
 
 type MenuItem = Database['public']['Tables']['menu_items']['Row'];
 type Order = Database['public']['Tables']['orders']['Row'];
@@ -57,11 +61,24 @@ export default function Bar() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [hotelSettings, setHotelSettings] = useState<any>(null);
 
   useEffect(() => {
     loadData();
+    loadSettings();
   }, []);
 
+  const loadSettings = async () => {
+    try {
+      const settings = await loadHotelSettings();
+      setHotelSettings(settings);
+      if (settings?.currency) {
+        currencyManager.setCurrency(settings.currency);
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  };
   const loadData = async () => {
     try {
       const [menuData, ordersData] = await Promise.all([
@@ -124,6 +141,7 @@ export default function Bar() {
   ];
 
   const addToCart = (menuItem: MenuItem) => {
+    playAddToCart();
     const existingItem = cart.find(item => item.menuItem.id === menuItem.id);
     if (existingItem) {
       setCart(cart.map(item => 
@@ -154,11 +172,16 @@ export default function Bar() {
 
   const calculateTotal = () => {
     const subtotal = cart.reduce((sum, item) => sum + (item.menuItem.price * item.quantity), 0);
-    const tax = subtotal * 0.08;
-    return { subtotal, tax, total: subtotal + tax };
+    const taxRate = (hotelSettings?.taxRate || 8.5) / 100;
+    const serviceChargeRate = (hotelSettings?.serviceChargeRate || 0) / 100;
+    const tax = subtotal * taxRate;
+    const serviceCharge = subtotal * serviceChargeRate;
+    const total = subtotal + tax + serviceCharge;
+    return { subtotal, tax, serviceCharge, total };
   };
 
   const placeOrder = async () => {
+    playButtonClick();
     if (cart.length === 0) {
       Alert.alert('Error', 'Cart is empty');
       return;
@@ -166,6 +189,9 @@ export default function Bar() {
 
     try {
       const { subtotal, tax, total } = calculateTotal();
+      const serviceCharge = subtotal * ((hotelSettings?.serviceChargeRate || 0) / 100);
+      const finalTotal = subtotal + tax + serviceCharge;
+      
       const orderItems = cart.map(item => ({
         menu_item_id: item.menuItem.id,
         quantity: item.quantity,
@@ -180,13 +206,32 @@ export default function Bar() {
         items: orderItems,
         subtotal,
         tax_amount: tax,
-        service_charge: 0,
-        total_amount: total,
+        service_charge: serviceCharge,
+        total_amount: finalTotal,
         status: 'pending',
         payment_status: 'pending',
       });
 
+      playOrderComplete();
       Alert.alert('Success', 'Order placed successfully');
+      
+      // Print receipt if printer available
+      try {
+        await receiptPrinter.printOrderReceipt({
+          order_number: `B-${Date.now()}`,
+          order_type: 'bar',
+          items: orderItems,
+          subtotal,
+          tax_amount: tax,
+          service_charge: serviceCharge,
+          total_amount: finalTotal,
+          created_at: new Date().toISOString(),
+          table_number: tableNumber,
+        }, hotelSettings?.currency || 'USD', hotelSettings);
+      } catch (printError) {
+        console.warn('Print failed:', printError);
+      }
+      
       setCart([]);
       setTableNumber('');
       loadData();
@@ -202,7 +247,11 @@ export default function Bar() {
     setRefreshing(false);
   }, []);
 
-  const { subtotal, tax, total } = calculateTotal();
+  const { subtotal, tax, serviceCharge, total } = calculateTotal();
+  
+  const formatCurrency = (amount: number) => {
+    return currencyManager.formatAmount(amount, hotelSettings?.currency);
+  };
 
   const getFilteredItems = () => {
     if (selectedCategory === 'all') {
@@ -309,7 +358,7 @@ export default function Bar() {
                     style={styles.menuItemGradient}
                   >
                     <Text style={styles.menuItemName}>{item.name.toUpperCase()}</Text>
-                    <Text style={styles.menuItemPrice}>${item.price}</Text>
+                    <Text style={styles.menuItemPrice}>{formatCurrency(item.price)}</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               ))}
@@ -333,7 +382,7 @@ export default function Bar() {
                     </TouchableOpacity>
                     <Text style={styles.orderItemNumber}>{index + 1}</Text>
                     <Text style={styles.orderItemName}>{item.menuItem.name.toUpperCase()}</Text>
-                    <Text style={styles.orderItemPrice}>${(item.menuItem.price * item.quantity).toFixed(2)}</Text>
+                    <Text style={styles.orderItemPrice}>{formatCurrency(item.menuItem.price * item.quantity)}</Text>
                   </View>
                   <View style={styles.orderItemDetails}>
                     <Text style={styles.orderItemCategory}>
@@ -362,8 +411,13 @@ export default function Bar() {
             {/* Order Total */}
             <View style={styles.orderTotal}>
               <View style={styles.totalDisplay}>
-                <Text style={styles.totalAmount}>${total.toFixed(2)}</Text>
-                <Text style={styles.taxAmount}>TAX ${tax.toFixed(2)}</Text>
+                <View style={styles.totalBreakdown}>
+                  <Text style={styles.totalAmount}>{formatCurrency(total)}</Text>
+                  <Text style={styles.taxAmount}>TAX {formatCurrency(tax)}</Text>
+                  {serviceCharge > 0 && (
+                    <Text style={styles.serviceAmount}>SERVICE {formatCurrency(serviceCharge)}</Text>
+                  )}
+                </View>
               </View>
             </View>
 
@@ -698,9 +752,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   totalDisplay: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  totalBreakdown: {
+    alignItems: 'flex-end',
+    width: '100%',
   },
   totalAmount: {
     fontSize: 32,
@@ -709,6 +765,11 @@ const styles = StyleSheet.create({
   },
   taxAmount: {
     fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#7f8c8d',
+  },
+  serviceAmount: {
+    fontSize: 14,
     fontFamily: 'Inter-SemiBold',
     color: '#7f8c8d',
   },
