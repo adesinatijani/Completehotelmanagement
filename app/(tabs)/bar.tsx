@@ -571,10 +571,16 @@ export default function Bar() {
               <TouchableOpacity
                 key={category.id}
                 style={[styles.categoryTile, selectedCategory === category.id && styles.selectedCategory]}
-                  onPress={handleNoReceipt}
                 onPress={() => setSelectedCategory(category.id)}
-                  <Receipt size={16} color="#fff" />
-                  <Text style={styles.actionButtonText}>NO RECEIPT</Text>
+              >
+                <LinearGradient
+                  colors={selectedCategory === category.id ? category.color : ['#ecf0f1', '#bdc3c7']}
+                  style={styles.categoryGradient}
+                >
+                  <Text style={styles.categoryIcon}>{category.icon}</Text>
+                  <Text style={[styles.categoryText, { color: selectedCategory === category.id ? '#fff' : '#2c3e50' }]}>
+                    {category.name}
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
             ))}
@@ -582,7 +588,6 @@ export default function Bar() {
 
           {/* Menu Items Grid */}
           <ScrollView 
-                  onPress={handleSaveOrder}
             style={styles.itemsGrid}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           >
@@ -625,8 +630,11 @@ export default function Bar() {
                     <Text style={styles.orderItemPrice}>{formatCurrency(item.menuItem.price * item.quantity)}</Text>
                   </View>
                   <View style={styles.orderItemDetails}>
-                  <Clock size={16} color="#fff" />
-                  <Text style={styles.actionButtonText}>SAVE</Text>
+                    <Text style={styles.orderItemCategory}>{item.menuItem.category.toUpperCase()}</Text>
+                    <View style={styles.quantityControls}>
+                      <TouchableOpacity
+                        style={styles.quantityButton}
+                        onPress={() => updateQuantity(item.menuItem.id, item.quantity - 1)}
                       >
                         <Text style={styles.quantityButtonText}>-</Text>
                       </TouchableOpacity>
@@ -703,7 +711,6 @@ export default function Bar() {
                     placeOrder();
                   }}
                   disabled={cart.length === 0}
-                  onPress={handleCashPayment}
                 >
                   <LinearGradient
                     colors={cart.length > 0 ? ['#27ae60', '#229954'] : ['#95a5a6', '#7f8c8d']}
@@ -723,8 +730,13 @@ export default function Bar() {
                     style={styles.paymentButtonGradient}
                   >
                     <TouchableOpacity 
-                  <DollarSign size={16} color="#fff" />
-                  <Text style={styles.paymentButtonText}>CASH</Text>
+                      style={styles.paymentButtonTouch}
+                      onPress={handleCashPayment}
+                    >
+                      <DollarSign size={16} color="#fff" />
+                      <Text style={styles.paymentButtonText}>CASH</Text>
+                    </TouchableOpacity>
+                  </LinearGradient>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.paymentButton}>
@@ -732,10 +744,14 @@ export default function Bar() {
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
                   >
-                  onPress={handleCreditPayment}
                     <TouchableOpacity 
-                  <CreditCard size={16} color="#fff" />
-                  <Text style={styles.paymentButtonText}>CREDIT</Text>
+                      style={styles.paymentButtonTouch}
+                      onPress={handleCreditPayment}
+                    >
+                      <CreditCard size={16} color="#fff" />
+                      <Text style={styles.paymentButtonText}>CREDIT</Text>
+                    </TouchableOpacity>
+                  </LinearGradient>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.paymentButton}>
@@ -743,10 +759,14 @@ export default function Bar() {
                     colors={['#2c3e50', '#34495e']}
                     style={styles.paymentButtonGradient}
                   >
-                  onPress={handleSettle}
                     <TouchableOpacity 
-                  <Settings size={16} color="#fff" />
-                  <Text style={styles.paymentButtonText}>SETTLE</Text>
+                      style={styles.paymentButtonTouch}
+                      onPress={handleSettle}
+                    >
+                      <Settings size={16} color="#fff" />
+                      <Text style={styles.paymentButtonText}>SETTLE</Text>
+                    </TouchableOpacity>
+                  </LinearGradient>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1079,6 +1099,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter-Bold',
     color: '#fff',
+  },
+  paymentButtonTouch: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionButtonTouch: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
   },
   templateSection: {
     backgroundColor: 'white',
