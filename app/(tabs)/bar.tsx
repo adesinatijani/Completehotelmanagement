@@ -630,7 +630,7 @@ export default function Bar() {
                     <Text style={styles.orderItemPrice}>{formatCurrency(item.menuItem.price * item.quantity)}</Text>
                   </View>
                   <View style={styles.orderItemDetails}>
-                    <Text style={styles.orderItemCategory}>{item.menuItem.category.toUpperCase()}</Text>
+                    <Text style={styles.orderItemCategory}>{item.menuItem.category}</Text>
                     <View style={styles.quantityControls}>
                       <TouchableOpacity
                         style={styles.quantityButton}
@@ -1073,6 +1073,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  actionButtonTouch: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
   actionButtonText: {
     fontSize: 12,
     fontFamily: 'Inter-Bold',
@@ -1095,11 +1102,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  paymentButtonText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
-    color: '#fff',
-  },
   paymentButtonTouch: {
     flex: 1,
     flexDirection: 'row',
@@ -1107,12 +1109,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  actionButtonTouch: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
+  paymentButtonText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+    color: '#fff',
   },
   templateSection: {
     backgroundColor: 'white',
