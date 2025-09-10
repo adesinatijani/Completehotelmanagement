@@ -274,18 +274,27 @@ export default function Bar() {
   };
   const handleNoReceipt = () => {
     playButtonClick();
-    if (!orderPlaced) {
-      Alert.alert(
-        'No Receipt',
-        'Order will be processed without printing a receipt. Continue?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Continue', onPress: () => placeOrder() }
-        ]
-      );
-    } else {
-      completePayment('No Receipt');
+    if (cart.length === 0) {
+      Alert.alert('Error', 'Cart is empty');
+      return;
     }
+
+    Alert.alert(
+      'No Receipt',
+      'Process order without printing receipt?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Process', 
+          onPress: async () => {
+            if (!orderPlaced) {
+              await placeOrder();
+            }
+            await completePayment('No Receipt');
+          }
+        }
+      ]
+    );
   };
 
   const handleSaveOrder = () => {
@@ -299,14 +308,15 @@ export default function Bar() {
       Alert.alert('Info', 'Order already placed. Please complete payment or start a new order.');
       return;
     }
-    Alert.alert(
+
+    Alert.prompt(
       'Save Order',
-      'Save this order for later processing?',
+      'Enter table number or guest name:',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Save', 
-          onPress: async () => {
+          onPress: async (identifier) => {
             try {
               const { subtotal, tax, total } = calculateTotal();
               const serviceCharge = subtotal * ((hotelSettings?.serviceChargeRate || 0) / 100);
@@ -321,7 +331,7 @@ export default function Bar() {
 
               await db.insert<Order>('orders', {
                 order_number: `B-SAVED-${Date.now()}`,
-                table_number: tableNumber || undefined,
+                table_number: identifier || 'Saved Order',
                 order_type: 'bar',
                 items: orderItems,
                 subtotal,
@@ -332,9 +342,11 @@ export default function Bar() {
                 payment_status: 'pending',
               });
 
-              Alert.alert('Success', 'Order saved successfully');
+              Alert.alert('Success', `Order saved for ${identifier || 'guest'}`);
               setCart([]);
               setTableNumber('');
+              setOrderPlaced(false);
+              setCurrentOrderId(null);
               loadData();
             } catch (error) {
               console.error('Error saving order:', error);
@@ -342,7 +354,9 @@ export default function Bar() {
             }
           }
         }
-      ]
+      ],
+      'plain-text',
+      tableNumber || ''
     );
   };
 
@@ -657,10 +671,14 @@ export default function Bar() {
                   <LinearGradient
                     colors={['#95a5a6', '#7f8c8d']}
                     style={styles.actionButtonGradient}
-                    onPress={handleNoReceipt}
                   >
-                    <Receipt size={16} color="#fff" />
-                    <Text style={styles.actionButtonText}>NO RECEIPT</Text>
+                    <TouchableOpacity 
+                      style={styles.actionButtonTouch}
+                      onPress={handleNoReceipt}
+                    >
+                      <Receipt size={16} color="#fff" />
+                      <Text style={styles.actionButtonText}>NO RECEIPT</Text>
+                    </TouchableOpacity>
                   </LinearGradient>
                 </TouchableOpacity>
 
@@ -668,23 +686,39 @@ export default function Bar() {
                   <LinearGradient
                     colors={['#3498db', '#2980b9']}
                     style={styles.actionButtonGradient}
-                    onPress={handleSaveOrder}
                   >
-                    <Clock size={16} color="#fff" />
-                    <Text style={styles.actionButtonText}>SAVE</Text>
+                    <TouchableOpacity 
+                      style={styles.actionButtonTouch}
+                      onPress={handleSaveOrder}
+                    >
+                      <Clock size={16} color="#fff" />
+                      <Text style={styles.actionButtonText}>SAVE</Text>
+                    </TouchableOpacity>
                   </LinearGradient>
                 </TouchableOpacity>
 
                 <TouchableOpacity 
                   style={styles.actionButton}
-                  onPress={placeOrder}
+                  onPress={() => {
+                    if (cart.length === 0) {
+                      Alert.alert('Error', 'Cart is empty');
+                      return;
+                    }
+                    if (orderPlaced) {
+                      Alert.alert('Info', 'Order already placed. Please select payment method.');
+                      return;
+                    }
+                    placeOrder();
+                  }}
                   disabled={cart.length === 0}
                 >
                   <LinearGradient
                     colors={cart.length > 0 ? ['#27ae60', '#229954'] : ['#95a5a6', '#7f8c8d']}
                     style={styles.actionButtonGradient}
                   >
-                    <Text style={styles.actionButtonText}>ORDER</Text>
+                    <Text style={styles.actionButtonText}>
+                      {orderPlaced ? 'ORDER PLACED' : 'ORDER'}
+                    </Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
@@ -1067,6 +1101,13 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   paymentButtonTouch: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionButtonTouch: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
