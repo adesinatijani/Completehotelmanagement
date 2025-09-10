@@ -11,6 +11,7 @@ import {
   RefreshControl,
   Animated,
   Dimensions,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,6 +20,8 @@ import { Database } from '@/types/database';
 import { ExcelImporter } from '@/components/ExcelImporter';
 import { ExcelTemplateDownloader } from '@/components/ExcelTemplateDownloader';
 import { Package, Plus, Search, TriangleAlert as AlertTriangle, TrendingDown, CreditCard as Edit, Star, Sparkles, Boxes, Download } from 'lucide-react-native';
+import { currencyManager } from '@/lib/currency';
+import { loadHotelSettings } from '@/lib/storage';
 
 type InventoryItem = Database['public']['Tables']['inventory']['Row'];
 
@@ -36,18 +39,27 @@ export default function Inventory() {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(30));
   const [importModal, setImportModal] = useState(false);
+  const [hotelSettings, setHotelSettings] = useState<any>(null);
 
   const [newItem, setNewItem] = useState({
     item_name: '',
     category: 'food' as InventoryItem['category'],
+    subcategory: '',
     current_stock: 0,
     minimum_stock: 0,
+    maximum_stock: 100,
+    unit: 'pieces',
     unit_cost: 0,
     supplier: '',
+    supplier_contact: '',
+    storage_location: '',
+    is_perishable: false,
+    barcode: '',
   });
 
   useEffect(() => {
     loadInventory();
+    loadSettings();
     
     // Entrance animations
     Animated.parallel([
@@ -64,15 +76,22 @@ export default function Inventory() {
     ]).start();
   }, []);
 
+  const loadSettings = async () => {
+    try {
+      const settings = await loadHotelSettings();
+      setHotelSettings(settings);
+      if (settings?.currency) {
+        currencyManager.setCurrency(settings.currency);
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  };
+
   const loadInventory = async () => {
     try {
-      const { data, error } = await supabase
-        .from('inventory')
-        .select('*')
-        .order('item_name');
-
-      if (error) throw error;
-      setInventory(data || []);
+      const inventoryData = await db.select<InventoryItem>('inventory');
+      setInventory(inventoryData);
     } catch (error) {
       console.error('Error loading inventory:', error);
       Alert.alert('Error', 'Failed to load inventory');
@@ -82,28 +101,37 @@ export default function Inventory() {
   };
 
   const createItem = async () => {
-    if (!newItem.item_name || !newItem.supplier || newItem.unit_cost <= 0) {
+    if (!newItem.item_name || !newItem.supplier || newItem.unit_cost <= 0 || !newItem.storage_location) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
     try {
-      const { error } = await supabase.from('inventory').insert([{
+      const totalValue = newItem.current_stock * newItem.unit_cost;
+      
+      await db.insert<InventoryItem>('inventory', {
         ...newItem,
+        total_value: totalValue,
         last_restocked: new Date().toISOString(),
-      }]);
-
-      if (error) throw error;
+        reorder_point: newItem.minimum_stock,
+      });
 
       Alert.alert('Success', 'Inventory item created successfully');
       setNewItemModal(false);
       setNewItem({
         item_name: '',
         category: 'food',
+        subcategory: '',
         current_stock: 0,
         minimum_stock: 0,
+        maximum_stock: 100,
+        unit: 'pieces',
         unit_cost: 0,
         supplier: '',
+        supplier_contact: '',
+        storage_location: '',
+        is_perishable: false,
+        barcode: '',
       });
       loadInventory();
     } catch (error) {
@@ -114,19 +142,25 @@ export default function Inventory() {
 
   const updateStock = async (itemId: string, newStock: number) => {
     try {
-      const { error } = await supabase
-        .from('inventory')
-        .update({ 
-          current_stock: newStock,
-          last_restocked: new Date().toISOString()
-        })
-        .eq('id', itemId);
-
-      if (error) throw error;
+      const item = inventory.find(i => i.id === itemId);
+      if (!item) return;
+      
+      const newValue = newStock * item.unit_cost;
+      
+      await db.update<InventoryItem>('inventory', itemId, {
+        current_stock: newStock,
+        total_value: newValue,
+        last_restocked: new Date().toISOString(),
+      });
 
       setInventory(inventory.map(item => 
         item.id === itemId 
-          ? { ...item, current_stock: newStock, last_restocked: new Date().toISOString() }
+          ? { 
+              ...item, 
+              current_stock: newStock, 
+              total_value: newValue,
+              last_restocked: new Date().toISOString() 
+            }
           : item
       ));
 
@@ -172,8 +206,12 @@ export default function Inventory() {
   };
 
   const categoryOptions: InventoryItem['category'][] = [
-    'food', 'beverage', 'amenity', 'cleaning', 'maintenance', 'office'
+    'food', 'beverage', 'alcohol', 'amenity', 'cleaning', 'maintenance', 'office', 'kitchen_equipment', 'bar_equipment'
   ];
+  
+  const formatCurrency = (amount: number) => {
+    return currencyManager.formatAmount(amount, hotelSettings?.currency);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -376,9 +414,9 @@ export default function Inventory() {
                 </View>
 
                 <View style={styles.itemDetails}>
-                  <Text style={styles.unitCost}>Unit Cost: ${item.unit_cost}</Text>
+                  <Text style={styles.unitCost}>Unit Cost: {formatCurrency(item.unit_cost)}</Text>
                   <Text style={styles.totalValue}>
-                    Total Value: ${(item.current_stock * item.unit_cost).toFixed(2)}
+                    Total Value: {formatCurrency(item.total_value || (item.current_stock * item.unit_cost))}
                   </Text>
                   <Text style={styles.lastRestocked}>
                     Last Restocked: {new Date(item.last_restocked).toLocaleDateString()}
@@ -474,6 +512,16 @@ export default function Inventory() {
               </View>
 
               <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Subcategory</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={newItem.subcategory}
+                  onChangeText={(text) => setNewItem({ ...newItem, subcategory: text })}
+                  placeholder="Enter subcategory (optional)"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Current Stock</Text>
                 <TextInput
                   style={styles.formInput}
@@ -496,6 +544,27 @@ export default function Inventory() {
               </View>
 
               <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Maximum Stock</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={newItem.maximum_stock.toString()}
+                  onChangeText={(text) => setNewItem({ ...newItem, maximum_stock: Number(text) || 100 })}
+                  placeholder="Enter maximum stock level"
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Unit</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={newItem.unit}
+                  onChangeText={(text) => setNewItem({ ...newItem, unit: text })}
+                  placeholder="pieces, kg, liters, bottles"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Unit Cost *</Text>
                 <TextInput
                   style={styles.formInput}
@@ -513,6 +582,44 @@ export default function Inventory() {
                   value={newItem.supplier}
                   onChangeText={(text) => setNewItem({ ...newItem, supplier: text })}
                   placeholder="Enter supplier name"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Supplier Contact</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={newItem.supplier_contact}
+                  onChangeText={(text) => setNewItem({ ...newItem, supplier_contact: text })}
+                  placeholder="Phone or email"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Storage Location *</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={newItem.storage_location}
+                  onChangeText={(text) => setNewItem({ ...newItem, storage_location: text })}
+                  placeholder="e.g., Kitchen Pantry, Bar Storage"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Barcode/SKU</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={newItem.barcode}
+                  onChangeText={(text) => setNewItem({ ...newItem, barcode: text })}
+                  placeholder="Enter barcode or SKU"
+                />
+              </View>
+
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Perishable Item</Text>
+                <Switch
+                  value={newItem.is_perishable}
+                  onValueChange={(value) => setNewItem({ ...newItem, is_perishable: value })}
                 />
               </View>
 
@@ -1081,6 +1188,17 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  switchLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#374151',
   },
   templateSection: {
     backgroundColor: 'white',
