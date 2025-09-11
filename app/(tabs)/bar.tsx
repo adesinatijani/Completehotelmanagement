@@ -180,17 +180,17 @@ export default function Bar() {
   }, [hotelSettings]);
 
   const processOrder = useCallback(async (paymentMethod: string) => {
-    console.log('🍷 Processing bar order with payment method:', paymentMethod);
+    console.log('🔄 Creating bar order (not yet sending to bar)');
     console.log('🛒 Current bar cart items:', cart.length);
     
     if (isProcessing) {
-      console.log('⏳ Already processing bar order, ignoring request');
+      console.log('⏳ Already processing order, ignoring request');
       return;
     }
     
     if (cart.length === 0) {
-      console.log('❌ Bar cart is empty, cannot process order');
-      Alert.alert('Order Error', 'Please add drinks to cart before placing order');
+      console.log('❌ Cart is empty, cannot create order');
+      Alert.alert('Order Error', 'Please add drinks to cart before creating order');
       return;
     }
 
@@ -213,9 +213,9 @@ export default function Bar() {
       // Generate order number
       const orderNumber = `B-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       
-      console.log('🍸 Creating bar order:', orderNumber, 'with', orderItems.length, 'items');
+      console.log('📋 Creating pending order:', orderNumber, 'with', orderItems.length, 'items');
       
-      // Create order in database
+      // Create pending order (not sent to bar yet)
       const orderData = {
         order_number: orderNumber,
         table_number: `Guest ${currentGuest}`,
@@ -225,43 +225,93 @@ export default function Bar() {
         tax_amount: totals.tax,
         service_charge: 0,
         total_amount: totals.total,
-        status: 'confirmed' as const,
+        status: 'pending' as const, // Order created but not sent to bar
+        payment_status: 'pending' as const,
+        payment_method: null,
+      };
+      
+      // Store as pending order (don't save to database yet)
+      setPendingOrder(orderData);
+      
+      console.log('✅ Pending order created:', orderData);
+
+      Alert.alert(
+        'Order Created!', 
+        `Order Number: ${orderNumber}\nDrinks: ${cart.length}\nTotal: ${formatCurrency(totals.total)}\n\nNow select payment method to send to bar.`,
+        [{ text: 'OK' }]
+      );
+      
+      // Don't clear cart yet - wait for payment
+      
+    } catch (error) {
+      console.error('Error processing order:', error);
+      Alert.alert('Error', `Failed to create order: ${error.message || error}. Please try again.`);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [isProcessing, cart, calculateTotals, currentGuest, formatCurrency]);
+
+  const processPayment = useCallback(async (paymentMethod: string) => {
+    console.log('💳 Processing payment with method:', paymentMethod);
+    
+    if (!pendingOrder) {
+      Alert.alert('Error', 'No pending order. Please create an order first.');
+      return;
+    }
+
+    if (isProcessing) {
+      console.log('⏳ Already processing payment, ignoring request');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      // Update order with payment information
+      const finalOrderData = {
+        ...pendingOrder,
+        status: 'confirmed' as const, // Now send to bar
         payment_status: paymentMethod === 'SETTLE' ? 'pending' as const : 'paid' as const,
         payment_method: paymentMethod.toLowerCase(),
       };
       
-      const order = await db.insert('orders', orderData);
+      console.log('💾 Saving order to database with payment:', finalOrderData);
       
-      console.log('✅ Bar order created successfully:', order);
+      // Save order to database (now it goes to bar)
+      const order = await db.insert('orders', finalOrderData);
+      
+      console.log('✅ Order saved and sent to bar:', order);
 
       // Handle receipt option
       if (receiptOption === 'print') {
-        Alert.alert('Receipt', `Bar receipt for order ${orderNumber} would be printed`);
+        Alert.alert('Receipt', `Bar receipt for order ${pendingOrder.order_number} would be printed`);
       } else if (receiptOption === 'email') {
-        Alert.alert('Receipt', `Bar receipt for order ${orderNumber} would be emailed to guest`);
+        Alert.alert('Receipt', `Bar receipt for order ${pendingOrder.order_number} would be emailed to guest`);
       }
 
       Alert.alert(
-        'Bar Order Placed Successfully!', 
-        `Order Number: ${orderNumber}\nDrinks: ${cart.length}\nTotal: ${formatCurrency(totals.total)}\nPayment: ${paymentMethod}\n\nOrder sent to bar!`,
+        'Payment Processed & Order Sent!', 
+        `Order Number: ${pendingOrder.order_number}\nDrinks: ${cart.length}\nTotal: ${formatCurrency(pendingOrder.total_amount)}\nPayment: ${paymentMethod}\n\n✅ Order sent to bar!`,
         [{ text: 'OK' }]
       );
       
-      // Clear cart and move to next guest
+      // Clear everything after successful payment
       setCart([]);
-      console.log('🧹 Bar cart cleared after successful order');
+      setPendingOrder(null);
+      console.log('🧹 Cart and pending order cleared after successful payment');
+      
       if (currentGuest < totalGuests) {
         setCurrentGuest(currentGuest + 1);
         console.log('👤 Moved to next guest:', currentGuest + 1);
       }
       
     } catch (error) {
-      console.error('Error processing order:', error);
-      Alert.alert('Error', `Failed to process bar order: ${error.message || error}. Please try again.`);
+      console.error('Error processing payment:', error);
+      Alert.alert('Error', `Failed to process payment: ${error.message || error}. Please try again.`);
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, cart, calculateTotals, receiptOption, currentGuest, totalGuests, formatCurrency]);
+  }, [isProcessing, pendingOrder, cart, receiptOption, formatCurrency, currentGuest, totalGuests]);
 
   const saveOrder = useCallback(() => {
     console.log('💾 Saving bar order for Guest', currentGuest);
@@ -339,11 +389,11 @@ export default function Bar() {
   const cancelOrder = useCallback(() => {
     console.log('❌ Cancelling bar order');
     
-    if (cart.length === 0) return;
+    if (cart.length === 0 && !pendingOrder) return;
     
     Alert.alert(
       'Cancel Order',
-      `Cancel current bar order?\n\nThis will remove all ${cart.length} drinks from your cart.\nTotal value: ${formatCurrency(calculateTotals.total)}\n\nThis action cannot be undone.`,
+      `Cancel current order?\n\n${pendingOrder ? 'This will cancel the pending order and ' : ''}remove all ${cart.length} drinks from your cart.\nTotal value: ${formatCurrency(calculateTotals.total)}\n\nThis action cannot be undone.`,
       [
         { text: 'Keep Order', style: 'cancel' },
         { 
@@ -351,12 +401,13 @@ export default function Bar() {
           style: 'destructive',
           onPress: () => {
             setCart([]);
+            setPendingOrder(null);
             Alert.alert('Bar Order Cancelled', 'All drinks have been removed from the cart');
           }
         }
       ]
     );
-  }, [cart, calculateTotals, formatCurrency]);
+  }, [cart, pendingOrder, calculateTotals, formatCurrency]);
 
 
   return (
@@ -475,12 +526,12 @@ export default function Bar() {
 
             <TouchableOpacity 
               style={[styles.actionButton, styles.orderButton]}
-              onPress={() => processOrder('CASH')}
-              disabled={cart.length === 0 || isProcessing}
+              onPress={processOrder}
+              disabled={cart.length === 0 || isProcessing || pendingOrder !== null}
             >
               <Wine size={20} color="white" />
               <Text style={[styles.actionButtonText, styles.orderButtonText]}>
-                {isProcessing ? 'PROCESSING...' : 'ORDER'}
+                {isProcessing ? 'CREATING...' : pendingOrder ? 'ORDER CREATED' : 'ORDER'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -489,8 +540,8 @@ export default function Bar() {
           <View style={styles.paymentButtons}>
             <TouchableOpacity 
               style={styles.paymentButton}
-              onPress={() => processOrder('CASH')}
-              disabled={cart.length === 0 || isProcessing}
+              onPress={() => processPayment('CASH')}
+              disabled={!pendingOrder || isProcessing}
             >
               <DollarSign size={20} color="white" />
               <Text style={styles.paymentButtonText}>CASH</Text>
@@ -498,8 +549,8 @@ export default function Bar() {
 
             <TouchableOpacity 
               style={styles.paymentButton}
-              onPress={() => processOrder('CREDIT')}
-              disabled={cart.length === 0 || isProcessing}
+              onPress={() => processPayment('CREDIT')}
+              disabled={!pendingOrder || isProcessing}
             >
               <CreditCard size={20} color="white" />
               <Text style={styles.paymentButtonText}>CREDIT</Text>
@@ -507,8 +558,8 @@ export default function Bar() {
 
             <TouchableOpacity 
               style={styles.paymentButton}
-              onPress={() => processOrder('SETTLE')}
-              disabled={cart.length === 0 || isProcessing}
+              onPress={() => processPayment('SETTLE')}
+              disabled={!pendingOrder || isProcessing}
             >
               <Users size={20} color="white" />
               <Text style={styles.paymentButtonText}>SETTLE</Text>
