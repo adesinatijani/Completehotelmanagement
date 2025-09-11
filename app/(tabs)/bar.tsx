@@ -559,9 +559,9 @@ export default function Bar() {
 
           {/* Order Total */}
           <View style={styles.orderTotal}>
+            <Text style={styles.totalAmount}>{formatCurrency(calculateTotals.total)}</Text>
             <Text style={styles.taxAmount}>TAX {formatCurrency(calculateTotals.tax)}</Text>
           </View>
-}
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
@@ -927,6 +927,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 2,
     borderTopColor: '#bdc3c7',
+  },
+  totalAmount: {
+    fontSize: 32,
+    fontFamily: 'Inter-Bold',
+    color: '#2c3e50',
   },
   totalAmount: {
     fontSize: 32,
