@@ -78,7 +78,6 @@ export default function Restaurant() {
   const [serverName] = useState('WALDO T');
   const [hotelSettings, setHotelSettings] = useState<any>(null);
   const [receiptOption, setReceiptOption] = useState<'no_receipt' | 'print' | 'email'>('no_receipt');
-  const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
 
   useEffect(() => {
     loadData();
@@ -236,10 +235,11 @@ export default function Restaurant() {
 
       Alert.alert(
         'Order Created!', 
-        `Order Number: ${orderNumber}\nItems: ${cart.length}\nTotal: ${formatCurrency(totals.total)}\n\nOrder ready to send to kitchen!`,
+        `Order Number: ${orderNumber}\nItems: ${cart.length}\nTotal: ${formatCurrency(totals.total)}\n\nNow select payment method to send to kitchen.`,
         [{ text: 'OK' }]
       );
       
+      // Don't clear cart yet - wait for payment
     } catch (error) {
       console.error('Error creating order:', error);
       Alert.alert('Error', `Failed to create order: ${error.message || error}. Please try again.`);
@@ -335,7 +335,7 @@ export default function Restaurant() {
         [{ text: 'OK' }]
       );
       
-      // Clear cart after successful payment
+      // Clear everything after successful payment
       setCart([]);
       console.log('🧹 Cart cleared after successful payment');
       
@@ -350,7 +350,7 @@ export default function Restaurant() {
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, cart, receiptOption, formatCurrency, currentGuest, totalGuests, calculateTotals, user?.id]);
+  }, [isProcessing, cart, receiptOption, formatCurrency, currentGuest, totalGuests, calculateTotals]);
 
   const saveOrder = useCallback(() => {
     console.log('💾 Saving order for Guest', currentGuest);

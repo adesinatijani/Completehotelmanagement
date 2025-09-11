@@ -544,11 +544,11 @@ export default function Bar() {
             <TouchableOpacity 
               style={[styles.actionButton, styles.orderButton]}
               onPress={createOrder}
-              disabled={cart.length === 0 || isProcessing || pendingOrder !== null}
+              disabled={cart.length === 0 || isProcessing}
             >
               <Wine size={20} color="white" />
               <Text style={[styles.actionButtonText, styles.orderButtonText]}>
-                {isProcessing ? 'CREATING...' : pendingOrder ? 'ORDER CREATED' : 'ORDER'}
+                {isProcessing ? 'CREATING...' : 'ORDER'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -558,7 +558,7 @@ export default function Bar() {
             <TouchableOpacity 
               style={styles.paymentButton}
               onPress={() => processPayment('CASH')}
-              disabled={!pendingOrder || isProcessing}
+              disabled={cart.length === 0 || isProcessing}
             >
               <DollarSign size={20} color="white" />
               <Text style={styles.paymentButtonText}>CASH</Text>
@@ -567,7 +567,7 @@ export default function Bar() {
             <TouchableOpacity 
               style={styles.paymentButton}
               onPress={() => processPayment('CREDIT')}
-              disabled={!pendingOrder || isProcessing}
+              disabled={cart.length === 0 || isProcessing}
             >
               <CreditCard size={20} color="white" />
               <Text style={styles.paymentButtonText}>CREDIT</Text>
@@ -576,7 +576,7 @@ export default function Bar() {
             <TouchableOpacity 
               style={styles.paymentButton}
               onPress={() => processPayment('SETTLE')}
-              disabled={!pendingOrder || isProcessing}
+              disabled={cart.length === 0 || isProcessing}
             >
               <Users size={20} color="white" />
               <Text style={styles.paymentButtonText}>SETTLE</Text>
