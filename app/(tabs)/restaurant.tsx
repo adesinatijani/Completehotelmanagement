@@ -138,40 +138,62 @@ export default function Restaurant() {
       categoryMap.get(item.category)!.push(item);
     });
 
-    const generatedCategories: MenuCategory[] = [
-      {
-        id: 'appetizers',
-        name: 'APPETIZERS',
-        color: '#ff6b6b',
-        icon: '🥗',
-        items: categoryMap.get('appetizer') || [],
-        count: (categoryMap.get('appetizer') || []).length
-      },
-      {
-        id: 'mains',
-        name: 'MAIN COURSE',
-        color: '#4ecdc4',
-        icon: '🍽️',
-        items: categoryMap.get('main_course') || [],
-        count: (categoryMap.get('main_course') || []).length
-      },
-      {
-        id: 'desserts',
-        name: 'DESSERTS',
-        color: '#a8e6cf',
-        icon: '🍰',
-        items: categoryMap.get('dessert') || [],
-        count: (categoryMap.get('dessert') || []).length
-      },
-      {
-        id: 'beverages',
-        name: 'BEVERAGES',
-        color: '#ffd93d',
-        icon: '🥤',
-        items: categoryMap.get('beverage') || [],
-        count: (categoryMap.get('beverage') || []).length
-      }
-    ].filter(category => category.count > 0);
+    // Generate all food categories dynamically
+    const foodCategoryConfigs = [
+      { key: 'appetizer', name: 'APPETIZERS', color: '#ff6b6b', icon: '🥗' },
+      { key: 'main_course', name: 'MAIN COURSE', color: '#4ecdc4', icon: '🍽️' },
+      { key: 'dessert', name: 'DESSERTS', color: '#a8e6cf', icon: '🍰' },
+      { key: 'beverage', name: 'BEVERAGES', color: '#ffd93d', icon: '🥤' },
+      { key: 'coffee', name: 'COFFEE', color: '#8b4513', icon: '☕' },
+      { key: 'tea', name: 'TEA', color: '#228b22', icon: '🍵' },
+      { key: 'juice', name: 'JUICES', color: '#ff8c00', icon: '🧃' },
+      { key: 'water', name: 'WATER', color: '#4682b4', icon: '💧' },
+    ];
+
+    const generatedCategories: MenuCategory[] = foodCategoryConfigs
+      .map(config => ({
+        id: config.key,
+        name: config.name,
+        color: config.color,
+        icon: config.icon,
+        items: categoryMap.get(config.key) || [],
+        count: (categoryMap.get(config.key) || []).length
+      }))
+      .filter(category => category.count > 0);
+
+    // Add special categories if items exist
+    const specialItems = menuItems.filter(item => 
+      item.name.toLowerCase().includes('special') || 
+      item.name.toLowerCase().includes('chef') ||
+      item.subcategory?.toLowerCase().includes('special')
+    );
+    
+    if (specialItems.length > 0) {
+      generatedCategories.push({
+        id: 'specials',
+        name: 'CHEF SPECIALS',
+        color: '#ff9ff3',
+        icon: '⭐',
+        items: specialItems,
+        count: specialItems.length
+      });
+    }
+
+    const saladItems = menuItems.filter(item => 
+      item.name.toLowerCase().includes('salad') ||
+      item.subcategory?.toLowerCase().includes('salad')
+    );
+    
+    if (saladItems.length > 0) {
+      generatedCategories.push({
+        id: 'salads',
+        name: 'SALADS',
+        color: '#95e1d3',
+        icon: '🥬',
+        items: saladItems,
+        count: saladItems.length
+      });
+    }
 
     setCategories(generatedCategories);
     if (generatedCategories.length > 0 && !selectedCategory) {
