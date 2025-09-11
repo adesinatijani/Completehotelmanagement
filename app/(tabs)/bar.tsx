@@ -668,85 +668,66 @@ export default function Bar() {
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
               <View style={styles.topButtons}>
-                <Pressable 
-                  style={({ pressed }) => [
-                    styles.actionButton, 
-                    { backgroundColor: pressed ? '#7f8c8d' : '#95a5a6' }
-                  ]} 
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#95a5a6' }]}
                   onPress={handleNoReceipt}
+                  activeOpacity={0.7}
                 >
                   <Receipt size={16} color="#fff" />
                   <Text style={styles.actionButtonText}>NO RECEIPT</Text>
-                </Pressable>
+                </TouchableOpacity>
 
-                <Pressable 
-                  style={({ pressed }) => [
-                    styles.actionButton, 
-                    { backgroundColor: pressed ? '#2980b9' : '#3498db' }
-                  ]} 
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#3498db' }]}
                   onPress={handleSaveOrder}
+                  activeOpacity={0.7}
                 >
                   <Clock size={16} color="#fff" />
                   <Text style={styles.actionButtonText}>SAVE</Text>
-                </Pressable>
+                </TouchableOpacity>
 
-                <Pressable 
-                  style={({ pressed }) => [
+                <TouchableOpacity 
+                  style={[
                     styles.actionButton, 
-                    { backgroundColor: cart.length > 0 ? (pressed ? '#229954' : '#27ae60') : '#95a5a6' }
+                    { backgroundColor: cart.length > 0 ? '#27ae60' : '#95a5a6' }
                   ]}
-                  onPress={() => {
-                    if (cart.length === 0) {
-                      Alert.alert('Error', 'Cart is empty');
-                      return;
-                    }
-                    if (orderPlaced) {
-                      Alert.alert('Info', 'Order already placed. Please select payment method.');
-                      return;
-                    }
-                    placeOrder();
-                  }}
+                  onPress={placeOrder}
                   disabled={cart.length === 0}
+                  activeOpacity={0.7}
                 >
                   <Text style={styles.actionButtonText}>
                     {orderPlaced ? 'ORDER PLACED' : 'ORDER'}
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.bottomButtons}>
-                <Pressable 
-                  style={({ pressed }) => [
-                    styles.paymentButton, 
-                    { backgroundColor: pressed ? '#1a252f' : '#2c3e50' }
-                  ]} 
+                <TouchableOpacity 
+                  style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
                   onPress={handleCashPayment}
+                  activeOpacity={0.7}
                 >
                   <DollarSign size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>CASH</Text>
-                </Pressable>
+                </TouchableOpacity>
 
-                <Pressable 
-                  style={({ pressed }) => [
-                    styles.paymentButton, 
-                    { backgroundColor: pressed ? '#1a252f' : '#2c3e50' }
-                  ]} 
+                <TouchableOpacity 
+                  style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
                   onPress={handleCreditPayment}
+                  activeOpacity={0.7}
                 >
                   <CreditCard size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>CREDIT</Text>
-                </Pressable>
+                </TouchableOpacity>
 
-                <Pressable 
-                  style={({ pressed }) => [
-                    styles.paymentButton, 
-                    { backgroundColor: pressed ? '#1a252f' : '#2c3e50' }
-                  ]} 
+                <TouchableOpacity 
+                  style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
                   onPress={handleSettle}
+                  activeOpacity={0.7}
                 >
                   <Settings size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>SETTLE</Text>
-                </Pressable>
+                </TouchableOpacity>
               </View>
             </View>
           </LinearGradient>
