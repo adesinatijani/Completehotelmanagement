@@ -500,228 +500,62 @@ export default function Bar() {
         {/* Right Panel - Bar Categories */}
         <View style={styles.rightPanel}>
           <View style={styles.menuGrid}>
-            {/* Bar Categories */}
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.beerBasket]}
-              onPress={() => addToCart({
-                id: 'beer-basket',
-                name: 'BEER SELECTION',
-                price: 6.99,
-                cost_price: 3.00,
-                category: 'beer',
-                subcategory: 'draft',
-                description: 'Assorted beer selection',
-                is_available: true,
-                ingredients: ['beer'],
-                prep_time_minutes: 2,
-                cooking_time_minutes: 0,
-                difficulty_level: 'easy',
-                is_vegetarian: true,
-                is_vegan: true,
-                is_gluten_free: false,
-                calories: 150,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryIcon}>🍺</Text>
-              <Text style={styles.menuCategoryText}>BEER BASKET</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.wine]}
-              onPress={() => addToCart({
-                id: 'house-wine',
-                name: 'HOUSE WINE',
-                price: 12.99,
-                cost_price: 6.50,
-                category: 'wine',
-                subcategory: 'red',
-                description: 'Premium house wine selection',
-                is_available: true,
-                ingredients: ['wine grapes'],
-                prep_time_minutes: 2,
-                cooking_time_minutes: 0,
-                difficulty_level: 'easy',
-                is_vegetarian: true,
-                is_vegan: true,
-                is_gluten_free: true,
-                calories: 120,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryIcon}>🍷</Text>
-              <Text style={styles.menuCategoryText}>WINE</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.cocktailShort]}
-              onPress={() => addToCart({
-                id: 'cocktail-short',
-                name: 'COCKTAIL SHORT',
-                price: 8.99,
-                cost_price: 4.00,
-                category: 'cocktail',
-                subcategory: 'shots',
-                description: 'Short cocktail selection',
-                is_available: true,
-                ingredients: ['spirits', 'mixers'],
-                prep_time_minutes: 3,
-                cooking_time_minutes: 0,
-                difficulty_level: 'easy',
-                is_vegetarian: true,
-                is_vegan: true,
-                is_gluten_free: true,
-                calories: 80,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryIcon}>🍸</Text>
-              <Text style={styles.menuCategoryText}>COCKTAIL SHORT</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.cocktail]}
-              onPress={() => addToCart({
-                id: 'cocktail-full',
-                name: 'COCKTAIL',
-                price: 14.99,
-                cost_price: 6.50,
-                category: 'cocktail',
-                subcategory: 'mixed',
-                description: 'Full cocktail selection',
-                is_available: true,
-                ingredients: ['spirits', 'mixers', 'garnish'],
-                prep_time_minutes: 5,
-                cooking_time_minutes: 0,
-                difficulty_level: 'medium',
-                is_vegetarian: true,
-                is_vegan: true,
-                is_gluten_free: true,
-                calories: 180,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryIcon}>🍹</Text>
-              <Text style={styles.menuCategoryText}>COCKTAIL</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.drinks]}
-              onPress={() => addToCart({
-                id: 'soft-drinks',
-                name: 'SOFT DRINKS',
-                price: 3.99,
-                cost_price: 1.50,
-                category: 'beverage',
-                subcategory: 'soft',
-                description: 'Non-alcoholic beverages',
-                is_available: true,
-                ingredients: ['soda', 'ice'],
-                prep_time_minutes: 1,
-                cooking_time_minutes: 0,
-                difficulty_level: 'easy',
-                is_vegetarian: true,
-                is_vegan: true,
-                is_gluten_free: true,
-                calories: 140,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryIcon}>🥤</Text>
-              <Text style={styles.menuCategoryText}>DRINKS</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.desserts]}
-              onPress={() => addToCart({
-                id: 'bar-desserts',
-                name: 'DESSERTS',
-                price: 7.99,
-                cost_price: 3.50,
-                category: 'dessert',
-                subcategory: 'sweet',
-                description: 'Sweet treats and desserts',
-                is_available: true,
-                ingredients: ['dessert ingredients'],
-                prep_time_minutes: 5,
-                cooking_time_minutes: 0,
-                difficulty_level: 'easy',
-                is_vegetarian: true,
-                is_vegan: false,
-                is_gluten_free: false,
-                calories: 320,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryIcon}>🍰</Text>
-              <Text style={styles.menuCategoryText}>DESSERTS</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.clubs]}
-              onPress={() => addToCart({
-                id: 'club-special',
-                name: 'CLUB SPECIAL',
-                price: 18.99,
-                cost_price: 9.00,
-                category: 'cocktail',
-                subcategory: 'premium',
-                description: 'Premium club cocktails',
-                is_available: true,
-                ingredients: ['premium spirits', 'special mixers'],
-                prep_time_minutes: 8,
-                cooking_time_minutes: 0,
-                difficulty_level: 'hard',
-                is_vegetarian: true,
-                is_vegan: true,
-                is_gluten_free: true,
-                calories: 220,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryIcon}>🏆</Text>
-              <Text style={styles.menuCategoryText}>CLUBS</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.sandwiches]}
-              onPress={() => addToCart({
-                id: 'bar-sandwich',
-                name: 'BAR SANDWICH',
-                price: 11.99,
-                cost_price: 5.50,
-                category: 'appetizer',
-                subcategory: 'bar_food',
-                description: 'Bar style sandwiches',
-                is_available: true,
-                ingredients: ['bread', 'filling', 'condiments'],
-                prep_time_minutes: 10,
-                cooking_time_minutes: 5,
-                difficulty_level: 'easy',
-                is_vegetarian: false,
-                is_vegan: false,
-                is_gluten_free: false,
-                calories: 450,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryIcon}>🥪</Text>
-              <Text style={styles.menuCategoryText}>SANDWICHES</Text>
-            </TouchableOpacity>
+            {/* Dynamic Bar Menu Items from Database */}
+            {menuItems.map((item) => (
+              <TouchableOpacity 
+                key={item.id}
+                style={[styles.menuCategory, { backgroundColor: getCategoryColor(item.category) }]}
+                onPress={() => addToCart(item)}
+              >
+                <Text style={styles.menuCategoryIcon}>{getCategoryIcon(item.category)}</Text>
+                <Text style={styles.menuCategoryText}>{item.name.toUpperCase()}</Text>
+                <Text style={styles.menuCategoryPrice}>{formatCurrency(item.price)}</Text>
+              </TouchableOpacity>
+            ))}
+            
+            {/* Show message if no menu items */}
+            {menuItems.length === 0 && (
+              <View style={styles.noMenuItems}>
+                <Text style={styles.noMenuItemsText}>No bar items available</Text>
+                <Text style={styles.noMenuItemsSubtext}>Add items in Menu Management</Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
     </SafeAreaView>
   );
 }
+
+const getCategoryIcon = (category: MenuItem['category']) => {
+  switch (category) {
+    case 'wine': return '🍷';
+    case 'beer': return '🍺';
+    case 'cocktail': return '🍹';
+    case 'spirits': return '🥃';
+    case 'beverage': return '🥤';
+    case 'coffee': return '☕';
+    case 'tea': return '🍵';
+    case 'juice': return '🧃';
+    case 'water': return '💧';
+    default: return '🍸';
+  }
+};
+
+const getCategoryColor = (category: MenuItem['category']) => {
+  switch (category) {
+    case 'wine': return '#8B0000';
+    case 'beer': return '#D2691E';
+    case 'cocktail': return '#DC143C';
+    case 'spirits': return '#4169E1';
+    case 'beverage': return '#228B22';
+    case 'coffee': return '#8B4513';
+    case 'tea': return '#228B22';
+    case 'juice': return '#FF8C00';
+    case 'water': return '#1E90FF';
+    default: return '#95a5a6';
+  }
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -1024,7 +858,7 @@ const styles = StyleSheet.create({
   },
   menuCategory: {
     width: (width - 350 - 60) / 3,
-    height: 120,
+    height: 140,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1047,12 +881,31 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  beerBasket: { backgroundColor: '#D2691E' },
-  wine: { backgroundColor: '#8B0000' },
-  cocktailShort: { backgroundColor: '#DC143C' },
-  cocktail: { backgroundColor: '#B22222' },
-  drinks: { backgroundColor: '#228B22' },
-  desserts: { backgroundColor: '#4169E1' },
-  clubs: { backgroundColor: '#191970' },
-  sandwiches: { backgroundColor: '#8A2BE2' },
+  menuCategoryPrice: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: 'white',
+    marginTop: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  noMenuItems: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  noMenuItemsText: {
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: '#bdc3c7',
+    marginBottom: 8,
+  },
+  noMenuItemsSubtext: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#95a5a6',
+    textAlign: 'center',
+  },
 });

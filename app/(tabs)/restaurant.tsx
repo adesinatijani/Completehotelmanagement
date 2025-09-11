@@ -500,298 +500,64 @@ export default function Restaurant() {
         {/* Right Panel - Menu Categories */}
         <View style={styles.rightPanel}>
           <View style={styles.menuGrid}>
-            {/* Food Categories */}
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.meatballSub]}
-              onPress={() => addToCart({
-                id: 'meatball-sub',
-                name: 'MEATBALL SUB',
-                price: 12.99,
-                cost_price: 6.50,
-                category: 'main_course',
-                subcategory: 'subs',
-                description: 'Italian meatballs with marinara sauce',
-                is_available: true,
-                ingredients: ['meatballs', 'marinara sauce', 'sub roll', 'cheese'],
-                prep_time_minutes: 15,
-                cooking_time_minutes: 10,
-                difficulty_level: 'easy',
-                is_vegetarian: false,
-                is_vegan: false,
-                is_gluten_free: false,
-                calories: 580,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryText}>MEATBALL SUB</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.steakSub]}
-              onPress={() => addToCart({
-                id: 'steak-sub',
-                name: 'STEAK SUB',
-                price: 15.99,
-                cost_price: 8.50,
-                category: 'main_course',
-                subcategory: 'subs',
-                description: 'Grilled steak with peppers and onions',
-                is_available: true,
-                ingredients: ['steak', 'peppers', 'onions', 'sub roll'],
-                prep_time_minutes: 20,
-                cooking_time_minutes: 15,
-                difficulty_level: 'medium',
-                is_vegetarian: false,
-                is_vegan: false,
-                is_gluten_free: false,
-                calories: 650,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryText}>STEAK SUB</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.steakHogie]}
-              onPress={() => addToCart({
-                id: 'steak-hogie',
-                name: 'STEAK HOGIE',
-                price: 14.99,
-                cost_price: 7.50,
-                category: 'main_course',
-                subcategory: 'hoagies',
-                description: 'Philadelphia style steak hoagie',
-                is_available: true,
-                ingredients: ['steak', 'cheese', 'hoagie roll', 'onions'],
-                prep_time_minutes: 18,
-                cooking_time_minutes: 12,
-                difficulty_level: 'medium',
-                is_vegetarian: false,
-                is_vegan: false,
-                is_gluten_free: false,
-                calories: 620,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryText}>STEAK HOGIE</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.italianSausage]}
-              onPress={() => addToCart({
-                id: 'italian-sausage',
-                name: 'ITALIAN SAUSAGE SUB',
-                price: 13.99,
-                cost_price: 7.00,
-                category: 'main_course',
-                subcategory: 'subs',
-                description: 'Spicy Italian sausage with peppers',
-                is_available: true,
-                ingredients: ['italian sausage', 'peppers', 'sub roll', 'sauce'],
-                prep_time_minutes: 16,
-                cooking_time_minutes: 14,
-                difficulty_level: 'easy',
-                is_vegetarian: false,
-                is_vegan: false,
-                is_gluten_free: false,
-                calories: 590,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryText}>ITALIAN SAUSAGE SUB</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.pizzaSub]}
-              onPress={() => addToCart({
-                id: 'pizza-sub',
-                name: 'PIZZA SUB',
-                price: 11.99,
-                cost_price: 5.50,
-                category: 'main_course',
-                subcategory: 'subs',
-                description: 'Pizza sauce, cheese, and pepperoni',
-                is_available: true,
-                ingredients: ['pizza sauce', 'cheese', 'pepperoni', 'sub roll'],
-                prep_time_minutes: 12,
-                cooking_time_minutes: 10,
-                difficulty_level: 'easy',
-                is_vegetarian: false,
-                is_vegan: false,
-                is_gluten_free: false,
-                calories: 520,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryText}>PIZZA SUB</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.chickenBreast]}
-              onPress={() => addToCart({
-                id: 'chicken-breast',
-                name: 'CHICKEN BREAST',
-                price: 16.99,
-                cost_price: 9.00,
-                category: 'main_course',
-                subcategory: 'chicken',
-                description: 'Grilled chicken breast with herbs',
-                is_available: true,
-                ingredients: ['chicken breast', 'herbs', 'seasoning'],
-                prep_time_minutes: 20,
-                cooking_time_minutes: 25,
-                difficulty_level: 'medium',
-                is_vegetarian: false,
-                is_vegan: false,
-                is_gluten_free: true,
-                calories: 450,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryText}>CHICKEN BREAST</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.roastBbq]}
-              onPress={() => addToCart({
-                id: 'roast-bbq',
-                name: 'ROAST BBQ CHICKEN',
-                price: 18.99,
-                cost_price: 10.50,
-                category: 'main_course',
-                subcategory: 'chicken',
-                description: 'BBQ roasted chicken with sauce',
-                is_available: true,
-                ingredients: ['whole chicken', 'bbq sauce', 'spices'],
-                prep_time_minutes: 30,
-                cooking_time_minutes: 45,
-                difficulty_level: 'medium',
-                is_vegetarian: false,
-                is_vegan: false,
-                is_gluten_free: true,
-                calories: 680,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryText}>ROAST BBQ CHICKEN</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.hamSub]}
-              onPress={() => addToCart({
-                id: 'ham-sub',
-                name: 'HAM SUB',
-                price: 10.99,
-                cost_price: 5.00,
-                category: 'main_course',
-                subcategory: 'subs',
-                description: 'Honey ham with lettuce and tomato',
-                is_available: true,
-                ingredients: ['honey ham', 'lettuce', 'tomato', 'sub roll'],
-                prep_time_minutes: 8,
-                cooking_time_minutes: 5,
-                difficulty_level: 'easy',
-                is_vegetarian: false,
-                is_vegan: false,
-                is_gluten_free: false,
-                calories: 420,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryText}>HAM SUB</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.tunaSub]}
-              onPress={() => addToCart({
-                id: 'tuna-sub',
-                name: 'TUNA SUB',
-                price: 12.99,
-                cost_price: 6.50,
-                category: 'main_course',
-                subcategory: 'subs',
-                description: 'Fresh tuna salad with vegetables',
-                is_available: true,
-                ingredients: ['tuna', 'vegetables', 'mayo', 'sub roll'],
-                prep_time_minutes: 10,
-                cooking_time_minutes: 0,
-                difficulty_level: 'easy',
-                is_vegetarian: false,
-                is_vegan: false,
-                is_gluten_free: false,
-                calories: 480,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryText}>TUNA SUB</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.turkeySub]}
-              onPress={() => addToCart({
-                id: 'turkey-sub',
-                name: 'TURKEY SUB',
-                price: 11.99,
-                cost_price: 5.50,
-                category: 'main_course',
-                subcategory: 'subs',
-                description: 'Roasted turkey with cranberry sauce',
-                is_available: true,
-                ingredients: ['turkey', 'cranberry sauce', 'lettuce', 'sub roll'],
-                prep_time_minutes: 10,
-                cooking_time_minutes: 5,
-                difficulty_level: 'easy',
-                is_vegetarian: false,
-                is_vegan: false,
-                is_gluten_free: false,
-                calories: 450,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryText}>TURKEY SUB</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.menuCategory, styles.bltSub]}
-              onPress={() => addToCart({
-                id: 'blt-sub',
-                name: 'BLT SUB',
-                price: 9.99,
-                cost_price: 4.50,
-                category: 'main_course',
-                subcategory: 'subs',
-                description: 'Bacon, lettuce, and tomato classic',
-                is_available: true,
-                ingredients: ['bacon', 'lettuce', 'tomato', 'sub roll'],
-                prep_time_minutes: 8,
-                cooking_time_minutes: 8,
-                difficulty_level: 'easy',
-                is_vegetarian: false,
-                is_vegan: false,
-                is_gluten_free: false,
-                calories: 380,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as MenuItem)}
-            >
-              <Text style={styles.menuCategoryText}>BLT SUB</Text>
-            </TouchableOpacity>
+            {/* Dynamic Menu Items from Database */}
+            {menuItems.map((item) => (
+              <TouchableOpacity 
+                key={item.id}
+                style={[styles.menuCategory, { backgroundColor: getCategoryColor(item.category) }]}
+                onPress={() => addToCart(item)}
+              >
+                <Text style={styles.menuCategoryIcon}>{getCategoryIcon(item.category)}</Text>
+                <Text style={styles.menuCategoryText}>{item.name.toUpperCase()}</Text>
+                <Text style={styles.menuCategoryPrice}>{formatCurrency(item.price)}</Text>
+              </TouchableOpacity>
+            ))}
+            
+            {/* Show message if no menu items */}
+            {menuItems.length === 0 && (
+              <View style={styles.noMenuItems}>
+                <Text style={styles.noMenuItemsText}>No menu items available</Text>
+                <Text style={styles.noMenuItemsSubtext}>Add items in Menu Management</Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
     </SafeAreaView>
   );
 }
+
+const getCategoryIcon = (category: MenuItem['category']) => {
+  switch (category) {
+    case 'appetizer': return '🥗';
+    case 'main_course': return '🍽️';
+    case 'dessert': return '🍰';
+    case 'beverage': return '🥤';
+    case 'wine': return '🍷';
+    case 'beer': return '🍺';
+    case 'cocktail': return '🍹';
+    case 'coffee': return '☕';
+    case 'tea': return '🍵';
+    case 'juice': return '🧃';
+    default: return '🍴';
+  }
+};
+
+const getCategoryColor = (category: MenuItem['category']) => {
+  switch (category) {
+    case 'appetizer': return '#e74c3c';
+    case 'main_course': return '#c0392b';
+    case 'dessert': return '#f39c12';
+    case 'beverage': return '#3498db';
+    case 'wine': return '#8B0000';
+    case 'beer': return '#D2691E';
+    case 'cocktail': return '#DC143C';
+    case 'coffee': return '#8B4513';
+    case 'tea': return '#228B22';
+    case 'juice': return '#FF8C00';
+    default: return '#95a5a6';
+  }
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -1094,7 +860,7 @@ const styles = StyleSheet.create({
   },
   menuCategory: {
     width: (width - 350 - 60) / 3,
-    height: 120,
+    height: 140,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1103,6 +869,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 4,
+  },
+  menuCategoryIcon: {
+    fontSize: 24,
+    marginBottom: 8,
   },
   menuCategoryText: {
     fontSize: 14,
@@ -1113,15 +883,31 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  meatballSub: { backgroundColor: '#e74c3c' },
-  steakSub: { backgroundColor: '#c0392b' },
-  steakHogie: { backgroundColor: '#8B4513' },
-  italianSausage: { backgroundColor: '#d35400' },
-  pizzaSub: { backgroundColor: '#f39c12' },
-  chickenBreast: { backgroundColor: '#D2691E' },
-  roastBbq: { backgroundColor: '#CD853F' },
-  hamSub: { backgroundColor: '#3498db' },
-  tunaSub: { backgroundColor: '#2980b9' },
-  turkeySub: { backgroundColor: '#8e44ad' },
-  bltSub: { backgroundColor: '#9b59b6' },
+  menuCategoryPrice: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: 'white',
+    marginTop: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  noMenuItems: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  noMenuItemsText: {
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: '#bdc3c7',
+    marginBottom: 8,
+  },
+  noMenuItemsSubtext: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#95a5a6',
+    textAlign: 'center',
+  },
 });
