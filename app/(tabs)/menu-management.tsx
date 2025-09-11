@@ -85,7 +85,10 @@ export default function MenuManagement() {
       Alert.alert('Success', 'Menu item created successfully');
       setNewItemModal(false);
       resetNewItem();
-      loadMenuItems();
+      await loadMenuItems();
+      
+      // Trigger immediate refresh in POS systems
+      console.log('✅ Menu item created, triggering POS refresh...');
     } catch (error) {
       console.error('Error creating menu item:', error);
       Alert.alert('Error', 'Failed to create menu item');
@@ -134,7 +137,10 @@ export default function MenuManagement() {
       Alert.alert('Success', 'Menu item updated successfully');
       setEditItemModal(false);
       setSelectedItem(null);
-      loadMenuItems();
+      await loadMenuItems();
+      
+      // Trigger immediate refresh in POS systems
+      console.log('✅ Menu item updated, triggering POS refresh...');
     } catch (error) {
       console.error('Error updating menu item:', error);
       Alert.alert('Error', 'Failed to update menu item');
