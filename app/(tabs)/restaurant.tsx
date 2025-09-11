@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { db } from '@/lib/database';
-import { loadHotelSettings } from '@/lib/storage';
+import { loadHotelSettings, saveHotelSettings } from '@/lib/storage';
 import { Database } from '@/types/database';
 import { currencyManager } from '@/lib/currency';
 import { 
@@ -78,6 +78,7 @@ export default function Restaurant() {
   const [serverName] = useState('WALDO T');
   const [hotelSettings, setHotelSettings] = useState<any>(null);
   const [receiptOption, setReceiptOption] = useState<'no_receipt' | 'print' | 'email'>('no_receipt');
+  const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
   const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
 
   useEffect(() => {
