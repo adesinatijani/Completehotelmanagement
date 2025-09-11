@@ -5,37 +5,31 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   Alert,
-  RefreshControl,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useAuthContext } from '@/contexts/AuthContext';
 import { db } from '@/lib/database';
 import { Database } from '@/types/database';
 import { loadHotelSettings } from '@/lib/storage';
 import { currencyManager } from '@/lib/currency';
-import { POSValidator, CartItem } from '@/lib/pos-validation';
-import { posOrderManager } from '@/lib/pos-order-manager';
 import { 
   Wine, 
-  Plus, 
-  Minus, 
   Search, 
-  ShoppingCart, 
   CreditCard, 
   DollarSign, 
   Users, 
-  Clock,
   Receipt,
   Save,
-  X,
-  Waves
 } from 'lucide-react-native';
 
 type MenuItem = Database['public']['Tables']['menu_items']['Row'];
+
+interface CartItem {
+  menuItem: MenuItem;
+  quantity: number;
+  specialInstructions?: string;
+}
 
 const { width, height } = Dimensions.get('window');
 
