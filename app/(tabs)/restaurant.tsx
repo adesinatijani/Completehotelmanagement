@@ -188,36 +188,60 @@ export default function Restaurant() {
     return { subtotal, tax, total };
   }, [cart, hotelSettings]);
 
-  const processOrder = async (paymentMethod: string) => {
+  const processOrder = useCallback(async (paymentMethod: string) => {
+    console.log('🔄 Processing order with payment method:', paymentMethod);
+    
     if (isProcessing || cart.length === 0) return;
     
-    // Validate cart before processing
-    const cartValidation = POSValidator.validateCart(cart);
-    if (!cartValidation.isValid) {
-      Alert.alert('Order Error', cartValidation.error || 'Invalid order');
+    if (cart.length === 0) {
+      Alert.alert('Order Error', 'Please add items to cart before placing order');
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      const order = await posOrderManager.createOrder({
-        cart,
-        tableNumber: `Guest ${currentGuest}`,
-        orderType: 'restaurant',
-        paymentMethod: paymentMethod.toLowerCase(),
-        paymentStatus: paymentMethod === 'SETTLE' ? 'pending' : 'paid',
-        hotelSettings,
+      // Calculate order totals
+      const totals = calculateTotals;
+      
+      // Create order items
+      const orderItems = cart.map(item => ({
+        menu_item_id: item.menuItem.id,
+        quantity: item.quantity,
+        unit_price: item.menuItem.price,
+        special_instructions: item.specialInstructions || '',
+      }));
+
+      // Generate order number
+      const orderNumber = `R-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
+      // Create order in database
+      const orderData = {
+        order_number: orderNumber,
+        table_number: `Guest ${currentGuest}`,
+        order_type: 'restaurant' as const,
+        items: orderItems,
+        subtotal: totals.subtotal,
+        tax_amount: totals.tax,
+        service_charge: 0,
+        total_amount: totals.total,
+        status: 'confirmed' as const,
+        payment_status: paymentMethod === 'SETTLE' ? 'pending' as const : 'paid' as const,
+        payment_method: paymentMethod.toLowerCase(),
       });
+      
+      const order = await db.insert('orders', orderData);
+      
+      console.log('✅ Order created successfully:', order);
 
       // Handle receipt option
       if (receiptOption === 'print') {
-        Alert.alert('Receipt', 'Receipt would be printed');
+        Alert.alert('Receipt', `Receipt for order ${orderNumber} would be printed`);
       } else if (receiptOption === 'email') {
-        Alert.alert('Receipt', 'Receipt would be emailed to guest');
+        Alert.alert('Receipt', `Receipt for order ${orderNumber} would be emailed to guest`);
       }
 
-      Alert.alert('Success', `Order ${order.order_number} placed successfully!`);
+      Alert.alert('Success', `Order ${orderNumber} placed successfully!\nTotal: ${formatCurrency(totals.total)}\nPayment: ${paymentMethod}`);
       
       // Clear cart and move to next guest
       setCart([]);
@@ -227,13 +251,15 @@ export default function Restaurant() {
       
     } catch (error) {
       console.error('Error processing order:', error);
-      Alert.alert('Error', 'Failed to process order. Please try again.');
+      Alert.alert('Error', `Failed to process order: ${error.message || error}. Please try again.`);
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [isProcessing, cart, calculateTotals, receiptOption, currentGuest, totalGuests, formatCurrency]);
 
-  const saveOrder = () => {
+  const saveOrder = useCallback(() => {
+    console.log('💾 Saving order for Guest', currentGuest);
+    
     if (cart.length === 0) {
       Alert.alert('Info', 'No items to save');
       return;
@@ -241,10 +267,12 @@ export default function Restaurant() {
     
     setSavedOrders(prev => [...prev, [...cart]]);
     setCart([]);
-    Alert.alert('Success', `Order saved for Guest ${currentGuest}. You can recall it later.`);
-  };
+    Alert.alert('Success', `Order saved for Guest ${currentGuest}!\nItems: ${cart.length}\nTotal: ${formatCurrency(calculateTotals.total)}\n\nYou can recall it later using the RECALL button.`);
+  }, [cart, currentGuest, calculateTotals, formatCurrency]);
 
-  const recallOrder = () => {
+  const recallOrder = useCallback(() => {
+    console.log('📥 Recalling saved order');
+    
     if (savedOrders.length === 0) {
       Alert.alert('Info', 'No saved orders to recall');
       return;
@@ -252,7 +280,7 @@ export default function Restaurant() {
     
     Alert.alert(
       'Recall Order',
-      `Recall saved order? This will replace current cart.`,
+      `Recall the last saved order?\n\nThis will replace your current cart with ${savedOrders[savedOrders.length - 1].length} saved items.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -261,19 +289,26 @@ export default function Restaurant() {
             const lastSavedOrder = savedOrders[savedOrders.length - 1];
             setCart(lastSavedOrder);
             setSavedOrders(prev => prev.slice(0, -1));
-            Alert.alert('Success', 'Order recalled successfully');
+            Alert.alert('Success', `Order recalled successfully!\nItems restored: ${lastSavedOrder.length}`);
           }
         }
       ]
     );
-  };
+  }, [savedOrders]);
 
-  const toggleReceiptOption = () => {
+  const toggleReceiptOption = useCallback(() => {
+    console.log('🧾 Toggling receipt option from:', receiptOption);
+    
     const options: Array<'no_receipt' | 'print' | 'email'> = ['no_receipt', 'print', 'email'];
     const currentIndex = options.indexOf(receiptOption);
     const nextIndex = (currentIndex + 1) % options.length;
+    const newOption = options[nextIndex];
+    
     setReceiptOption(options[nextIndex]);
-  };
+    
+    console.log('✅ Receipt option changed to:', newOption);
+    Alert.alert('Receipt Option', `Receipt option changed to: ${newOption.replace('_', ' ').toUpperCase()}`);
+  }, [receiptOption]);
 
   const getReceiptButtonText = () => {
     switch (receiptOption) {
@@ -282,18 +317,28 @@ export default function Restaurant() {
       case 'email': return 'EMAIL RECEIPT';
     }
   };
-  const cancelOrder = () => {
+  
+  const cancelOrder = useCallback(() => {
+    console.log('❌ Cancelling order');
+    
     if (cart.length === 0) return;
     
     Alert.alert(
       'Cancel Order',
-      'Are you sure you want to cancel this order?',
+      `Are you sure you want to cancel this order?\n\nItems in cart: ${cart.length}\nTotal value: ${formatCurrency(calculateTotals.total)}`,
       [
         { text: 'No', style: 'cancel' },
-        { text: 'Yes', onPress: () => setCart([]) }
+        { 
+          text: 'Yes', 
+          style: 'destructive',
+          onPress: () => {
+            setCart([]);
+            Alert.alert('Order Cancelled', 'Cart has been cleared');
+          }
+        }
       ]
     );
-  };
+  }, [cart, calculateTotals, formatCurrency]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -319,7 +364,10 @@ export default function Restaurant() {
           <Text style={styles.serverInfo}>SERVER: {serverName}</Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.searchButton}>
+          <TouchableOpacity 
+            style={styles.searchButton}
+            onPress={() => Alert.alert('Search', 'Search functionality would open here')}
+          >
             <Search size={20} color="white" />
             <Text style={styles.searchButtonText}>SEARCH</Text>
           </TouchableOpacity>
@@ -359,7 +407,10 @@ export default function Restaurant() {
                 {cart.filter((_, index) => (index % 3) === (guestNum - 1)).map((item, index) => (
                   <View key={`${item.menuItem.id}-${index}`} style={styles.orderItem}>
                     <View style={styles.orderItemLeft}>
-                      <TouchableOpacity style={styles.playButton}>
+                      <TouchableOpacity 
+                        style={styles.playButton}
+                        onPress={() => Alert.alert('Item Options', `Options for ${item.menuItem.name}`)}
+                      >
                         <Text style={styles.playButtonText}>▶</Text>
                       </TouchableOpacity>
                       <Text style={styles.orderItemNumber}>{index + 1}</Text>
@@ -370,9 +421,33 @@ export default function Restaurant() {
                         {item.menuItem.description.substring(0, 30)}...
                       </Text>
                     </View>
-                    <Text style={styles.orderItemPrice}>
-                      {formatCurrency(item.menuItem.price * item.quantity)}
-                    </Text>
+                    <TouchableOpacity 
+                      style={styles.priceButton}
+                      onPress={() => {
+                        Alert.prompt(
+                          'Update Quantity',
+                          `Current quantity: ${item.quantity}`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { 
+                              text: 'Update', 
+                              onPress: (value) => {
+                                const newQty = parseInt(value || '0');
+                                if (newQty > 0) {
+                                  updateQuantity(item.menuItem.id, newQty);
+                                }
+                              }
+                            }
+                          ],
+                          'plain-text',
+                          item.quantity.toString()
+                        );
+                      }}
+                    >
+                      <Text style={styles.orderItemPrice}>
+                        {formatCurrency(item.menuItem.price * item.quantity)}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 ))}
               </View>
@@ -444,7 +519,19 @@ export default function Restaurant() {
             <TouchableOpacity style={styles.bottomButton} onPress={recallOrder}>
               <Text style={styles.bottomButtonText}>RECALL</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.bottomButton} onPress={() => Alert.alert('Logout', 'Logout functionality')}>
+            <TouchableOpacity 
+              style={styles.bottomButton} 
+              onPress={() => {
+                Alert.alert(
+                  'Logout',
+                  'Are you sure you want to logout?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Logout', onPress: () => Alert.alert('Logged Out', 'You have been logged out') }
+                  ]
+                );
+              }}
+            >
               <Text style={styles.bottomButtonText}>LOGOUT</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.bottomButton} onPress={cancelOrder}>
@@ -463,9 +550,21 @@ export default function Restaurant() {
                 id: 'meatball-sub',
                 name: 'MEATBALL SUB',
                 price: 12.99,
+                cost_price: 6.50,
                 category: 'main_course',
+                subcategory: 'subs',
                 description: 'Italian meatballs with marinara sauce',
-                is_available: true
+                is_available: true,
+                ingredients: ['meatballs', 'marinara sauce', 'sub roll', 'cheese'],
+                prep_time_minutes: 15,
+                cooking_time_minutes: 10,
+                difficulty_level: 'easy',
+                is_vegetarian: false,
+                is_vegan: false,
+                is_gluten_free: false,
+                calories: 580,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryText}>MEATBALL SUB</Text>
@@ -477,9 +576,21 @@ export default function Restaurant() {
                 id: 'steak-sub',
                 name: 'STEAK SUB',
                 price: 15.99,
+                cost_price: 8.50,
                 category: 'main_course',
+                subcategory: 'subs',
                 description: 'Grilled steak with peppers and onions',
-                is_available: true
+                is_available: true,
+                ingredients: ['steak', 'peppers', 'onions', 'sub roll'],
+                prep_time_minutes: 20,
+                cooking_time_minutes: 15,
+                difficulty_level: 'medium',
+                is_vegetarian: false,
+                is_vegan: false,
+                is_gluten_free: false,
+                calories: 650,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryText}>STEAK SUB</Text>
@@ -491,9 +602,21 @@ export default function Restaurant() {
                 id: 'steak-hogie',
                 name: 'STEAK HOGIE',
                 price: 14.99,
+                cost_price: 7.50,
                 category: 'main_course',
+                subcategory: 'hoagies',
                 description: 'Philadelphia style steak hoagie',
-                is_available: true
+                is_available: true,
+                ingredients: ['steak', 'cheese', 'hoagie roll', 'onions'],
+                prep_time_minutes: 18,
+                cooking_time_minutes: 12,
+                difficulty_level: 'medium',
+                is_vegetarian: false,
+                is_vegan: false,
+                is_gluten_free: false,
+                calories: 620,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryText}>STEAK HOGIE</Text>
@@ -505,9 +628,21 @@ export default function Restaurant() {
                 id: 'italian-sausage',
                 name: 'ITALIAN SAUSAGE SUB',
                 price: 13.99,
+                cost_price: 7.00,
                 category: 'main_course',
+                subcategory: 'subs',
                 description: 'Spicy Italian sausage with peppers',
-                is_available: true
+                is_available: true,
+                ingredients: ['italian sausage', 'peppers', 'sub roll', 'sauce'],
+                prep_time_minutes: 16,
+                cooking_time_minutes: 14,
+                difficulty_level: 'easy',
+                is_vegetarian: false,
+                is_vegan: false,
+                is_gluten_free: false,
+                calories: 590,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryText}>ITALIAN SAUSAGE SUB</Text>
@@ -519,9 +654,21 @@ export default function Restaurant() {
                 id: 'pizza-sub',
                 name: 'PIZZA SUB',
                 price: 11.99,
+                cost_price: 5.50,
                 category: 'main_course',
+                subcategory: 'subs',
                 description: 'Pizza sauce, cheese, and pepperoni',
-                is_available: true
+                is_available: true,
+                ingredients: ['pizza sauce', 'cheese', 'pepperoni', 'sub roll'],
+                prep_time_minutes: 12,
+                cooking_time_minutes: 10,
+                difficulty_level: 'easy',
+                is_vegetarian: false,
+                is_vegan: false,
+                is_gluten_free: false,
+                calories: 520,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryText}>PIZZA SUB</Text>
@@ -533,9 +680,21 @@ export default function Restaurant() {
                 id: 'chicken-breast',
                 name: 'CHICKEN BREAST',
                 price: 16.99,
+                cost_price: 9.00,
                 category: 'main_course',
+                subcategory: 'chicken',
                 description: 'Grilled chicken breast with herbs',
-                is_available: true
+                is_available: true,
+                ingredients: ['chicken breast', 'herbs', 'seasoning'],
+                prep_time_minutes: 20,
+                cooking_time_minutes: 25,
+                difficulty_level: 'medium',
+                is_vegetarian: false,
+                is_vegan: false,
+                is_gluten_free: true,
+                calories: 450,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryText}>CHICKEN BREAST</Text>
@@ -547,9 +706,21 @@ export default function Restaurant() {
                 id: 'roast-bbq',
                 name: 'ROAST BBQ CHICKEN',
                 price: 18.99,
+                cost_price: 10.50,
                 category: 'main_course',
+                subcategory: 'chicken',
                 description: 'BBQ roasted chicken with sauce',
-                is_available: true
+                is_available: true,
+                ingredients: ['whole chicken', 'bbq sauce', 'spices'],
+                prep_time_minutes: 30,
+                cooking_time_minutes: 45,
+                difficulty_level: 'medium',
+                is_vegetarian: false,
+                is_vegan: false,
+                is_gluten_free: true,
+                calories: 680,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryText}>ROAST BBQ CHICKEN</Text>
@@ -561,9 +732,21 @@ export default function Restaurant() {
                 id: 'ham-sub',
                 name: 'HAM SUB',
                 price: 10.99,
+                cost_price: 5.00,
                 category: 'main_course',
+                subcategory: 'subs',
                 description: 'Honey ham with lettuce and tomato',
-                is_available: true
+                is_available: true,
+                ingredients: ['honey ham', 'lettuce', 'tomato', 'sub roll'],
+                prep_time_minutes: 8,
+                cooking_time_minutes: 5,
+                difficulty_level: 'easy',
+                is_vegetarian: false,
+                is_vegan: false,
+                is_gluten_free: false,
+                calories: 420,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryText}>HAM SUB</Text>
@@ -575,9 +758,21 @@ export default function Restaurant() {
                 id: 'tuna-sub',
                 name: 'TUNA SUB',
                 price: 12.99,
+                cost_price: 6.50,
                 category: 'main_course',
+                subcategory: 'subs',
                 description: 'Fresh tuna salad with vegetables',
-                is_available: true
+                is_available: true,
+                ingredients: ['tuna', 'vegetables', 'mayo', 'sub roll'],
+                prep_time_minutes: 10,
+                cooking_time_minutes: 0,
+                difficulty_level: 'easy',
+                is_vegetarian: false,
+                is_vegan: false,
+                is_gluten_free: false,
+                calories: 480,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryText}>TUNA SUB</Text>
@@ -589,9 +784,21 @@ export default function Restaurant() {
                 id: 'turkey-sub',
                 name: 'TURKEY SUB',
                 price: 11.99,
+                cost_price: 5.50,
                 category: 'main_course',
+                subcategory: 'subs',
                 description: 'Roasted turkey with cranberry sauce',
-                is_available: true
+                is_available: true,
+                ingredients: ['turkey', 'cranberry sauce', 'lettuce', 'sub roll'],
+                prep_time_minutes: 10,
+                cooking_time_minutes: 5,
+                difficulty_level: 'easy',
+                is_vegetarian: false,
+                is_vegan: false,
+                is_gluten_free: false,
+                calories: 450,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryText}>TURKEY SUB</Text>
@@ -603,9 +810,21 @@ export default function Restaurant() {
                 id: 'blt-sub',
                 name: 'BLT SUB',
                 price: 9.99,
+                cost_price: 4.50,
                 category: 'main_course',
+                subcategory: 'subs',
                 description: 'Bacon, lettuce, and tomato classic',
-                is_available: true
+                is_available: true,
+                ingredients: ['bacon', 'lettuce', 'tomato', 'sub roll'],
+                prep_time_minutes: 8,
+                cooking_time_minutes: 8,
+                difficulty_level: 'easy',
+                is_vegetarian: false,
+                is_vegan: false,
+                is_gluten_free: false,
+                calories: 380,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryText}>BLT SUB</Text>
@@ -774,6 +993,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#7f8c8d',
     marginTop: 2,
+  },
+  priceButton: {
+    padding: 4,
   },
   orderItemPrice: {
     fontSize: 14,

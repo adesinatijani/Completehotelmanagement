@@ -129,36 +129,60 @@ export default function Bar() {
     return { subtotal, tax, total };
   }, [cart, hotelSettings]);
 
-  const processOrder = async (paymentMethod: string) => {
+  const processOrder = useCallback(async (paymentMethod: string) => {
+    console.log('🍷 Processing bar order with payment method:', paymentMethod);
+    
     if (isProcessing || cart.length === 0) return;
     
-    // Validate cart before processing
-    const cartValidation = POSValidator.validateCart(cart);
-    if (!cartValidation.isValid) {
-      Alert.alert('Order Error', cartValidation.error || 'Invalid order');
+    if (cart.length === 0) {
+      Alert.alert('Order Error', 'Please add drinks to cart before placing order');
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      const order = await posOrderManager.createOrder({
-        cart,
-        tableNumber: `Guest ${currentGuest}`,
-        orderType: 'bar',
-        paymentMethod: paymentMethod.toLowerCase(),
-        paymentStatus: paymentMethod === 'SETTLE' ? 'pending' : 'paid',
-        hotelSettings,
+      // Calculate order totals
+      const totals = calculateTotals;
+      
+      // Create order items
+      const orderItems = cart.map(item => ({
+        menu_item_id: item.menuItem.id,
+        quantity: item.quantity,
+        unit_price: item.menuItem.price,
+        special_instructions: item.specialInstructions || '',
+      }));
+
+      // Generate order number
+      const orderNumber = `B-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
+      // Create order in database
+      const orderData = {
+        order_number: orderNumber,
+        table_number: `Guest ${currentGuest}`,
+        order_type: 'bar' as const,
+        items: orderItems,
+        subtotal: totals.subtotal,
+        tax_amount: totals.tax,
+        service_charge: 0,
+        total_amount: totals.total,
+        status: 'confirmed' as const,
+        payment_status: paymentMethod === 'SETTLE' ? 'pending' as const : 'paid' as const,
+        payment_method: paymentMethod.toLowerCase(),
       });
+      
+      const order = await db.insert('orders', orderData);
+      
+      console.log('✅ Bar order created successfully:', order);
 
       // Handle receipt option
       if (receiptOption === 'print') {
-        Alert.alert('Receipt', 'Receipt would be printed');
+        Alert.alert('Receipt', `Bar receipt for order ${orderNumber} would be printed`);
       } else if (receiptOption === 'email') {
-        Alert.alert('Receipt', 'Receipt would be emailed to guest');
+        Alert.alert('Receipt', `Bar receipt for order ${orderNumber} would be emailed to guest`);
       }
 
-      Alert.alert('Success', `Order ${order.order_number} placed successfully!`);
+      Alert.alert('Success', `Bar Order ${orderNumber} placed successfully!\nTotal: ${formatCurrency(totals.total)}\nPayment: ${paymentMethod}`);
       
       // Clear cart and move to next guest
       setCart([]);
@@ -168,13 +192,15 @@ export default function Bar() {
       
     } catch (error) {
       console.error('Error processing order:', error);
-      Alert.alert('Error', 'Failed to process order. Please try again.');
+      Alert.alert('Error', `Failed to process bar order: ${error.message || error}. Please try again.`);
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [isProcessing, cart, calculateTotals, receiptOption, currentGuest, totalGuests, formatCurrency]);
 
-  const saveOrder = () => {
+  const saveOrder = useCallback(() => {
+    console.log('💾 Saving bar order for Guest', currentGuest);
+    
     if (cart.length === 0) {
       Alert.alert('Info', 'No items to save');
       return;
@@ -182,10 +208,12 @@ export default function Bar() {
     
     setSavedOrders(prev => [...prev, [...cart]]);
     setCart([]);
-    Alert.alert('Success', `Order saved for Guest ${currentGuest}. You can recall it later.`);
-  };
+    Alert.alert('Success', `Bar order saved for Guest ${currentGuest}!\nItems: ${cart.length}\nTotal: ${formatCurrency(calculateTotals.total)}\n\nYou can recall it later using the RECALL button.`);
+  }, [cart, currentGuest, calculateTotals, formatCurrency]);
 
-  const recallOrder = () => {
+  const recallOrder = useCallback(() => {
+    console.log('📥 Recalling saved bar order');
+    
     if (savedOrders.length === 0) {
       Alert.alert('Info', 'No saved orders to recall');
       return;
@@ -193,7 +221,7 @@ export default function Bar() {
     
     Alert.alert(
       'Recall Order',
-      `Recall saved order? This will replace current cart.`,
+      `Recall the last saved bar order?\n\nThis will replace your current cart with ${savedOrders[savedOrders.length - 1].length} saved items.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -202,19 +230,26 @@ export default function Bar() {
             const lastSavedOrder = savedOrders[savedOrders.length - 1];
             setCart(lastSavedOrder);
             setSavedOrders(prev => prev.slice(0, -1));
-            Alert.alert('Success', 'Order recalled successfully');
+            Alert.alert('Success', `Bar order recalled successfully!\nItems restored: ${lastSavedOrder.length}`);
           }
         }
       ]
     );
-  };
+  }, [savedOrders]);
 
-  const toggleReceiptOption = () => {
+  const toggleReceiptOption = useCallback(() => {
+    console.log('🧾 Toggling bar receipt option from:', receiptOption);
+    
     const options: Array<'no_receipt' | 'print' | 'email'> = ['no_receipt', 'print', 'email'];
     const currentIndex = options.indexOf(receiptOption);
     const nextIndex = (currentIndex + 1) % options.length;
+    const newOption = options[nextIndex];
+    
     setReceiptOption(options[nextIndex]);
-  };
+    
+    console.log('✅ Bar receipt option changed to:', newOption);
+    Alert.alert('Receipt Option', `Bar receipt option changed to: ${newOption.replace('_', ' ').toUpperCase()}`);
+  }, [receiptOption]);
 
   const getReceiptButtonText = () => {
     switch (receiptOption) {
@@ -223,18 +258,27 @@ export default function Bar() {
       case 'email': return 'EMAIL RECEIPT';
     }
   };
-  const cancelOrder = () => {
+  const cancelOrder = useCallback(() => {
+    console.log('❌ Cancelling bar order');
+    
     if (cart.length === 0) return;
     
     Alert.alert(
       'Cancel Order',
-      'Are you sure you want to cancel this order?',
+      `Are you sure you want to cancel this bar order?\n\nItems in cart: ${cart.length}\nTotal value: ${formatCurrency(calculateTotals.total)}`,
       [
         { text: 'No', style: 'cancel' },
-        { text: 'Yes', onPress: () => setCart([]) }
+        { 
+          text: 'Yes', 
+          style: 'destructive',
+          onPress: () => {
+            setCart([]);
+            Alert.alert('Order Cancelled', 'Bar cart has been cleared');
+          }
+        }
       ]
     );
-  };
+  }, [cart, calculateTotals, formatCurrency]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -260,7 +304,10 @@ export default function Bar() {
           <Text style={styles.serverInfo}>SERVER: {serverName}</Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.searchButton}>
+          <TouchableOpacity 
+            style={styles.searchButton}
+            onPress={() => Alert.alert('Search', 'Bar search functionality would open here')}
+          >
             <Search size={20} color="white" />
             <Text style={styles.searchButtonText}>SEARCH</Text>
           </TouchableOpacity>
@@ -300,7 +347,10 @@ export default function Bar() {
                 {cart.filter((_, index) => (index % 3) === (guestNum - 1)).map((item, index) => (
                   <View key={`${item.menuItem.id}-${index}`} style={styles.orderItem}>
                     <View style={styles.orderItemLeft}>
-                      <TouchableOpacity style={styles.playButton}>
+                      <TouchableOpacity 
+                        style={styles.playButton}
+                        onPress={() => Alert.alert('Item Options', `Options for ${item.menuItem.name}`)}
+                      >
                         <Text style={styles.playButtonText}>▶</Text>
                       </TouchableOpacity>
                       <Text style={styles.orderItemNumber}>{index + 1}</Text>
@@ -311,9 +361,33 @@ export default function Bar() {
                         {item.menuItem.description.substring(0, 30)}...
                       </Text>
                     </View>
-                    <Text style={styles.orderItemPrice}>
-                      {formatCurrency(item.menuItem.price * item.quantity)}
-                    </Text>
+                    <TouchableOpacity 
+                      style={styles.priceButton}
+                      onPress={() => {
+                        Alert.prompt(
+                          'Update Quantity',
+                          `Current quantity: ${item.quantity}`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { 
+                              text: 'Update', 
+                              onPress: (value) => {
+                                const newQty = parseInt(value || '0');
+                                if (newQty > 0) {
+                                  updateQuantity(item.menuItem.id, newQty);
+                                }
+                              }
+                            }
+                          ],
+                          'plain-text',
+                          item.quantity.toString()
+                        );
+                      }}
+                    >
+                      <Text style={styles.orderItemPrice}>
+                        {formatCurrency(item.menuItem.price * item.quantity)}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 ))}
               </View>
@@ -385,7 +459,19 @@ export default function Bar() {
             <TouchableOpacity style={styles.bottomButton} onPress={recallOrder}>
               <Text style={styles.bottomButtonText}>RECALL</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.bottomButton} onPress={() => Alert.alert('Logout', 'Logout functionality')}>
+            <TouchableOpacity 
+              style={styles.bottomButton} 
+              onPress={() => {
+                Alert.alert(
+                  'Logout',
+                  'Are you sure you want to logout from bar POS?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Logout', onPress: () => Alert.alert('Logged Out', 'You have been logged out from bar POS') }
+                  ]
+                );
+              }}
+            >
               <Text style={styles.bottomButtonText}>LOGOUT</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.bottomButton} onPress={cancelOrder}>
@@ -404,9 +490,21 @@ export default function Bar() {
                 id: 'beer-basket',
                 name: 'BEER SELECTION',
                 price: 6.99,
+                cost_price: 3.00,
                 category: 'beer',
+                subcategory: 'draft',
                 description: 'Assorted beer selection',
-                is_available: true
+                is_available: true,
+                ingredients: ['beer'],
+                prep_time_minutes: 2,
+                cooking_time_minutes: 0,
+                difficulty_level: 'easy',
+                is_vegetarian: true,
+                is_vegan: true,
+                is_gluten_free: false,
+                calories: 150,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryIcon}>🍺</Text>
@@ -419,9 +517,21 @@ export default function Bar() {
                 id: 'house-wine',
                 name: 'HOUSE WINE',
                 price: 12.99,
+                cost_price: 6.50,
                 category: 'wine',
+                subcategory: 'red',
                 description: 'Premium house wine selection',
-                is_available: true
+                is_available: true,
+                ingredients: ['wine grapes'],
+                prep_time_minutes: 2,
+                cooking_time_minutes: 0,
+                difficulty_level: 'easy',
+                is_vegetarian: true,
+                is_vegan: true,
+                is_gluten_free: true,
+                calories: 120,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryIcon}>🍷</Text>
@@ -434,9 +544,21 @@ export default function Bar() {
                 id: 'cocktail-short',
                 name: 'COCKTAIL SHORT',
                 price: 8.99,
+                cost_price: 4.00,
                 category: 'cocktail',
+                subcategory: 'shots',
                 description: 'Short cocktail selection',
-                is_available: true
+                is_available: true,
+                ingredients: ['spirits', 'mixers'],
+                prep_time_minutes: 3,
+                cooking_time_minutes: 0,
+                difficulty_level: 'easy',
+                is_vegetarian: true,
+                is_vegan: true,
+                is_gluten_free: true,
+                calories: 80,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryIcon}>🍸</Text>
@@ -449,9 +571,21 @@ export default function Bar() {
                 id: 'cocktail-full',
                 name: 'COCKTAIL',
                 price: 14.99,
+                cost_price: 6.50,
                 category: 'cocktail',
+                subcategory: 'mixed',
                 description: 'Full cocktail selection',
-                is_available: true
+                is_available: true,
+                ingredients: ['spirits', 'mixers', 'garnish'],
+                prep_time_minutes: 5,
+                cooking_time_minutes: 0,
+                difficulty_level: 'medium',
+                is_vegetarian: true,
+                is_vegan: true,
+                is_gluten_free: true,
+                calories: 180,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryIcon}>🍹</Text>
@@ -464,9 +598,21 @@ export default function Bar() {
                 id: 'soft-drinks',
                 name: 'SOFT DRINKS',
                 price: 3.99,
+                cost_price: 1.50,
                 category: 'beverage',
+                subcategory: 'soft',
                 description: 'Non-alcoholic beverages',
-                is_available: true
+                is_available: true,
+                ingredients: ['soda', 'ice'],
+                prep_time_minutes: 1,
+                cooking_time_minutes: 0,
+                difficulty_level: 'easy',
+                is_vegetarian: true,
+                is_vegan: true,
+                is_gluten_free: true,
+                calories: 140,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryIcon}>🥤</Text>
@@ -479,9 +625,21 @@ export default function Bar() {
                 id: 'bar-desserts',
                 name: 'DESSERTS',
                 price: 7.99,
+                cost_price: 3.50,
                 category: 'dessert',
+                subcategory: 'sweet',
                 description: 'Sweet treats and desserts',
-                is_available: true
+                is_available: true,
+                ingredients: ['dessert ingredients'],
+                prep_time_minutes: 5,
+                cooking_time_minutes: 0,
+                difficulty_level: 'easy',
+                is_vegetarian: true,
+                is_vegan: false,
+                is_gluten_free: false,
+                calories: 320,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryIcon}>🍰</Text>
@@ -494,9 +652,21 @@ export default function Bar() {
                 id: 'club-special',
                 name: 'CLUB SPECIAL',
                 price: 18.99,
+                cost_price: 9.00,
                 category: 'cocktail',
+                subcategory: 'premium',
                 description: 'Premium club cocktails',
-                is_available: true
+                is_available: true,
+                ingredients: ['premium spirits', 'special mixers'],
+                prep_time_minutes: 8,
+                cooking_time_minutes: 0,
+                difficulty_level: 'hard',
+                is_vegetarian: true,
+                is_vegan: true,
+                is_gluten_free: true,
+                calories: 220,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryIcon}>🏆</Text>
@@ -509,9 +679,21 @@ export default function Bar() {
                 id: 'bar-sandwich',
                 name: 'BAR SANDWICH',
                 price: 11.99,
+                cost_price: 5.50,
                 category: 'appetizer',
+                subcategory: 'bar_food',
                 description: 'Bar style sandwiches',
-                is_available: true
+                is_available: true,
+                ingredients: ['bread', 'filling', 'condiments'],
+                prep_time_minutes: 10,
+                cooking_time_minutes: 5,
+                difficulty_level: 'easy',
+                is_vegetarian: false,
+                is_vegan: false,
+                is_gluten_free: false,
+                calories: 450,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               } as MenuItem)}
             >
               <Text style={styles.menuCategoryIcon}>🥪</Text>
@@ -681,6 +863,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#7f8c8d',
     marginTop: 2,
+  },
+  priceButton: {
+    padding: 4,
   },
   orderItemPrice: {
     fontSize: 14,
