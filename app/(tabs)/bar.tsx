@@ -175,46 +175,6 @@ export default function Bar() {
     
     if (premiumItems.length > 0) {
       generatedCategories.push({
-      {
-        id: 'beer',
-        name: 'BEER BASKET',
-        color: '#d4a574',
-        icon: '🍺',
-        items: categoryMap.get('beer') || [],
-        count: (categoryMap.get('beer') || []).length
-      },
-      {
-        id: 'wine',
-        name: 'WINE',
-        color: '#8b0000',
-        icon: '🍷',
-        items: categoryMap.get('wine') || [],
-        count: (categoryMap.get('wine') || []).length
-      },
-      {
-        id: 'cocktail',
-        name: 'COCKTAIL',
-        color: '#dc143c',
-        icon: '🍹',
-        items: categoryMap.get('cocktail') || [],
-        count: (categoryMap.get('cocktail') || []).length
-      },
-      {
-        id: 'spirits',
-        name: 'SPIRITS',
-        color: '#4169e1',
-        icon: '🥃',
-        items: categoryMap.get('spirits') || [],
-        count: (categoryMap.get('spirits') || []).length
-      },
-      {
-        id: 'drinks',
-        name: 'DRINKS',
-        color: '#228b22',
-        icon: '🥤',
-        items: [...(categoryMap.get('beverage') || []), ...(categoryMap.get('coffee') || []), ...(categoryMap.get('tea') || []), ...(categoryMap.get('juice') || []), ...(categoryMap.get('water') || [])],
-        count: (categoryMap.get('beverage') || []).length + (categoryMap.get('coffee') || []).length + (categoryMap.get('tea') || []).length + (categoryMap.get('juice') || []).length + (categoryMap.get('water') || []).length
-      }
         id: 'premium',
         name: 'PREMIUM SELECTION',
         color: '#ffd700',
