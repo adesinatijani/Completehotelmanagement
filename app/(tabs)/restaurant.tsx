@@ -445,7 +445,10 @@ export default function Restaurant() {
   const cancelOrder = useCallback(() => {
     console.log('❌ Cancelling order');
     
-    if (cart.length === 0) return;
+    if (cart.length === 0) return
+  }
+  )
+};
     
     Alert.alert(
       'Cancel Order',
