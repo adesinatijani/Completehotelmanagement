@@ -4,6 +4,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { loadHotelSettings } from '@/lib/storage';
+import { sampleDataLoader } from '@/lib/sample-data';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
   LayoutDashboard, 
@@ -33,6 +34,7 @@ export default function TabLayout() {
 
   useEffect(() => {
     loadHotelName();
+    initializeSampleData();
     
     // Listen for settings changes
     const interval = setInterval(async () => {
@@ -54,6 +56,16 @@ export default function TabLayout() {
     } catch (error) {
       console.error('Failed to load hotel name:', error);
       setHotelName('Grand Hotel');
+    }
+  };
+
+  const initializeSampleData = async () => {
+    try {
+      console.log('🔄 Initializing sample data for POS systems...');
+      await sampleDataLoader.initializeAllSampleData();
+      console.log('✅ Sample data initialization completed');
+    } catch (error) {
+      console.warn('⚠️ Sample data initialization failed (non-critical):', error);
     }
   };
 
