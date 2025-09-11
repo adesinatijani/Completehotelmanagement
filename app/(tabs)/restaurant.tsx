@@ -32,44 +32,22 @@ interface CartItem {
   specialInstructions?: string;
 }
 
+interface MenuCategory {
+  id: string;
+  name: string;
+  color: string;
+  icon: string;
+  items: MenuItem[];
+  count: number;
+}
 const { width, height } = Dimensions.get('window');
 
-// Helper functions moved to top
-const getCategoryIcon = (category: MenuItem['category']) => {
-  switch (category) {
-    case 'appetizer': return '🥗';
-    case 'main_course': return '🍽️';
-    case 'dessert': return '🍰';
-    case 'beverage': return '🥤';
-    case 'wine': return '🍷';
-    case 'beer': return '🍺';
-    case 'cocktail': return '🍹';
-    case 'coffee': return '☕';
-    case 'tea': return '🍵';
-    case 'juice': return '🧃';
-    default: return '🍴';
-  }
-};
-
-const getCategoryColor = (category: MenuItem['category']) => {
-  switch (category) {
-    case 'appetizer': return '#e74c3c';
-    case 'main_course': return '#c0392b';
-    case 'dessert': return '#f39c12';
-    case 'beverage': return '#3498db';
-    case 'wine': return '#8B0000';
-    case 'beer': return '#D2691E';
-    case 'cocktail': return '#DC143C';
-    case 'coffee': return '#8B4513';
-    case 'tea': return '#228B22';
-    case 'juice': return '#FF8C00';
-    default: return '#95a5a6';
-  }
-};
 
 export default function Restaurant() {
   const { user } = useAuthContext();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<MenuCategory | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -86,6 +64,11 @@ export default function Restaurant() {
     loadSettings();
   }, []);
 
+  useEffect(() => {
+    if (menuItems.length > 0) {
+      generateCategories();
+    }
+  }, [menuItems]);
   const loadSettings = async () => {
     try {
       const settings = await loadHotelSettings();
@@ -123,6 +106,50 @@ export default function Restaurant() {
     }
   };
 
+  const generateCategories = () => {
+    const categoryMap = new Map<string, MenuItem[]>();
+    
+    menuItems.forEach(item => {
+      if (!categoryMap.has(item.category)) {
+        categoryMap.set(item.category, []);
+      }
+      categoryMap.get(item.category)!.push(item);
+    });
+
+    const generatedCategories: MenuCategory[] = [
+      {
+        id: 'appetizers',
+        name: 'APPETIZERS',
+        color: '#ff6b6b',
+        icon: '🥗',
+        items: categoryMap.get('appetizer') || [],
+        count: (categoryMap.get('appetizer') || []).length
+      },
+      {
+        id: 'mains',
+        name: 'MAIN COURSE',
+        color: '#4ecdc4',
+        icon: '🍽️',
+        items: categoryMap.get('main_course') || [],
+        count: (categoryMap.get('main_course') || []).length
+      },
+      {
+        id: 'desserts',
+        name: 'DESSERTS',
+        color: '#a8e6cf',
+        icon: '🍰',
+        items: categoryMap.get('dessert') || [],
+        count: (categoryMap.get('dessert') || []).length
+      },
+      {
+        id: 'beverages',
+        name: 'BEVERAGES',
+        color: '#ffd93d',
+        icon: '🥤',
+        items: categoryMap.get('beverage') || [],
+        count: (categoryMap.get('beverage') || []).length
+      }
+    ].filter(category => category.count > 0);
   const addToCart = useCallback((menuItem: MenuItem) => {
     if (isProcessing) return;
     
@@ -234,6 +261,11 @@ export default function Restaurant() {
       
       console.log('✅ Pending order created:', orderData);
 
+    setCategories(generatedCategories);
+    if (generatedCategories.length > 0 && !selectedCategory) {
+      setSelectedCategory(generatedCategories[0]);
+    }
+  };
 
       Alert.alert(
         'Order Created!', 
@@ -632,9 +664,77 @@ export default function Restaurant() {
 
         {/* Right Panel - Menu Categories */}
         <View style={styles.rightPanel}>
-          <View style={styles.menuGrid}>
-            {/* Dynamic Menu Items from Database */}
-            {menuItems.map((item) => (
+          {!selectedCategory ? (
+            <View style={styles.menuGrid}>
+              {/* Category Selection */}
+              {categories.map((category) => (
+                <TouchableOpacity 
+                  key={category.id}
+                  style={[styles.menuCategory, { backgroundColor: category.color }]}
+                  onPress={() => setSelectedCategory(category)}
+                >
+                  <Text style={styles.menuCategoryIcon}>{category.icon}</Text>
+                  <Text style={styles.menuCategoryText}>{category.name}</Text>
+                  <Text style={styles.menuCategoryCount}>({category.count} items)</Text>
+                </TouchableOpacity>
+              ))}
+              
+              {categories.length === 0 && !loading && (
+                <View style={styles.noMenuItems}>
+                  <Text style={styles.noMenuItemsText}>No menu categories available</Text>
+                  <Text style={styles.noMenuItemsSubtext}>Add items in Menu Management</Text>
+                </View>
+              )}
+              
+              {loading && (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>Loading menu categories...</Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.itemsView}>
+              {/* Back to Categories Button */}
+              <TouchableOpacity 
+                style={styles.backButton}
+                onPress={() => setSelectedCategory(null)}
+              >
+                <Text style={styles.backButtonText}>← BACK TO CATEGORIES</Text>
+              </TouchableOpacity>
+              
+              {/* Category Header */}
+              <View style={[styles.categoryHeader, { backgroundColor: selectedCategory.color }]}>
+                <Text style={styles.categoryHeaderIcon}>{selectedCategory.icon}</Text>
+                <Text style={styles.categoryHeaderText}>{selectedCategory.name}</Text>
+                <Text style={styles.categoryHeaderCount}>({selectedCategory.count} items)</Text>
+              </View>
+              
+              {/* Menu Items Grid */}
+              <ScrollView style={styles.itemsScrollView}>
+                <View style={styles.itemsGrid}>
+                  {selectedCategory.items.map((item) => (
+                    <TouchableOpacity 
+                      key={item.id}
+                      style={[styles.menuItem, { borderColor: selectedCategory.color }]}
+                      onPress={() => addToCart(item)}
+                    >
+                      <Text style={styles.menuItemName}>{item.name}</Text>
+                      <Text style={styles.menuItemDescription}>{item.description}</Text>
+                      <Text style={styles.menuItemPrice}>{formatCurrency(item.price)}</Text>
+                      {item.prep_time_minutes > 0 && (
+                        <Text style={styles.menuItemTime}>{item.prep_time_minutes} min</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </div>
+          )}
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
               <TouchableOpacity 
                 key={item.id}
                 style={[
@@ -672,6 +772,463 @@ export default function Restaurant() {
   );
 }
 
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#2c3e50',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#34495e',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  appName: {
+    fontSize: 24,
+    fontFamily: 'Inter-Bold',
+    color: 'white',
+  },
+  orderType: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#bdc3c7',
+    marginTop: 2,
+  },
+  serverInfo: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#95a5a6',
+    marginTop: 2,
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+  },
+  searchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3498db',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    gap: 6,
+  },
+  searchButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+  },
+  mainContent: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  leftPanel: {
+    width: 350,
+    backgroundColor: '#ecf0f1',
+    borderRightWidth: 2,
+    borderRightColor: '#bdc3c7',
+  },
+  rightPanel: {
+    flex: 1,
+    backgroundColor: '#2c3e50',
+    padding: 20,
+  },
+  guestSelector: {
+    backgroundColor: '#3498db',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  guestTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+  },
+  guestControls: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  guestButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  guestButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+  },
+  orderItemsContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  guestSection: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#ecf0f1',
+  },
+  guestHeader: {
+    backgroundColor: '#34495e',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  guestLabel: {
+    color: 'white',
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+  },
+  orderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ecf0f1',
+  },
+  orderItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: 60,
+  },
+  playButton: {
+    backgroundColor: '#27ae60',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playButtonText: {
+    color: 'white',
+    fontSize: 10,
+    fontFamily: 'Inter-Bold',
+  },
+  orderItemNumber: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    color: '#2c3e50',
+  },
+  orderItemCenter: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  orderItemName: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    color: '#2c3e50',
+  },
+  orderItemDetails: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#7f8c8d',
+    marginTop: 2,
+  },
+  orderItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quantityButton: {
+    backgroundColor: '#3498db',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+  },
+  quantityText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    color: '#2c3e50',
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  priceButton: {
+    padding: 4,
+  },
+  orderItemPrice: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    color: '#2c3e50',
+    minWidth: 60,
+    textAlign: 'right',
+  },
+  emptyCart: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyCartText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#7f8c8d',
+  },
+  emptyCartSubtext: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#95a5a6',
+    marginTop: 4,
+  },
+  orderTotal: {
+    backgroundColor: 'white',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    borderTopWidth: 2,
+    borderTopColor: '#bdc3c7',
+  },
+  totalAmount: {
+    fontSize: 32,
+    fontFamily: 'Inter-Bold',
+    color: '#2c3e50',
+  },
+  taxAmount: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#7f8c8d',
+    marginTop: 4,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    backgroundColor: '#ecf0f1',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#bdc3c7',
+    paddingVertical: 12,
+    borderRadius: 6,
+    gap: 6,
+  },
+  orderButton: {
+    backgroundColor: '#27ae60',
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: '#2c3e50',
+  },
+  orderButtonText: {
+    color: 'white',
+  },
+  paymentButtons: {
+    flexDirection: 'row',
+    backgroundColor: '#2c3e50',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  paymentButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#34495e',
+    paddingVertical: 16,
+    borderRadius: 6,
+    gap: 6,
+  },
+  paymentButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    color: 'white',
+  },
+  bottomActions: {
+    flexDirection: 'row',
+    backgroundColor: '#34495e',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  bottomButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  bottomButtonText: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: '#bdc3c7',
+  },
+  menuGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  menuCategory: {
+    width: Math.floor((width - 350 - 80) / 3),
+    height: 140,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  menuCategoryDisabled: {
+    opacity: 0.5,
+  },
+  menuCategoryIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  menuCategoryText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: 'white',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  menuCategoryCount: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: 'white',
+    marginTop: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  itemsView: {
+    flex: 1,
+  },
+  backButton: {
+    backgroundColor: '#34495e',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    marginBottom: 16,
+  },
+  backButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+  },
+  categoryHeader: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  categoryHeaderIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  categoryHeaderText: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: 'white',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  categoryHeaderCount: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: 'white',
+    marginTop: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  itemsScrollView: {
+    flex: 1,
+  },
+  itemsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  menuItem: {
+    width: Math.floor((width - 350 - 80) / 4),
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  menuItemName: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    color: '#2c3e50',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  menuItemDescription: {
+    fontSize: 10,
+    fontFamily: 'Inter-Regular',
+    color: '#7f8c8d',
+    marginBottom: 8,
+    textAlign: 'center',
+    lineHeight: 12,
+  },
+  menuItemPrice: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#27ae60',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  menuItemTime: {
+    fontSize: 10,
+    fontFamily: 'Inter-Regular',
+    color: '#95a5a6',
+    textAlign: 'center',
+  },
+  noMenuItems: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  noMenuItemsText: {
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: '#bdc3c7',
+    marginBottom: 8,
+  },
+  noMenuItemsSubtext: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#95a5a6',
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: '#bdc3c7',
+  },
+});
 const styles = StyleSheet.create({
   container: {
     flex: 1,
