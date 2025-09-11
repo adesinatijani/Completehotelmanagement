@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { db } from '@/lib/database';
+import { saveHotelSettings } from '@/lib/storage';
 import { Database } from '@/types/database';
 import { loadHotelSettings } from '@/lib/storage';
 import { currencyManager } from '@/lib/currency';
@@ -252,6 +253,11 @@ export default function Restaurant() {
   const processPayment = useCallback(async (paymentMethod: string) => {
     console.log('💳 Processing payment with method:', paymentMethod);
     
+    if (cart.length === 0) {
+      Alert.alert('Error', 'Please add items to cart before processing payment');
+      return;
+    }
+
     if (isProcessing) {
       console.log('⏳ Already processing payment, ignoring request');
       return;
