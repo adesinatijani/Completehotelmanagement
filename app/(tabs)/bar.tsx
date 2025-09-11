@@ -18,6 +18,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { db } from '@/lib/database';
 import { loadHotelSettings } from '@/lib/storage';
 import { Database } from '@/types/database';
+import { POSErrorBoundary } from '@/components/POSErrorBoundary';
+import { POSValidator, CartItem, POSError, POSErrorType } from '@/lib/pos-validation';
+import { posErrorHandler } from '@/lib/pos-error-handler';
+import { posOrderManager } from '@/lib/pos-order-manager';
+import { posStateManager } from '@/lib/pos-state-manager';
+import { useOptimizedMenuItems, useOptimizedCategories, useOptimizedSearch } from '@/lib/pos-performance';
+import { posAccessibilityManager, useScreenReaderAnnouncement } from '@/lib/pos-accessibility';
 import { Wine, Search, User, Trash2, CreditCard, DollarSign, Clock, Receipt, Settings, Martini, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, Loader } from 'lucide-react-native';
 import { audioManager } from '@/lib/audio';
 import { currencyManager } from '@/lib/currency';
@@ -49,6 +56,7 @@ const MAX_ORDER_VALUE = 10000;
 const ORDER_TIMEOUT = 30000; // 30 seconds
 
 export default function Bar() {
+  // Enhanced state management with proper error handling
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -63,16 +71,43 @@ export default function Bar() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
+  const [networkStatus, setNetworkStatus] = useState<'online' | 'offline' | 'checking'>('checking');
+  const [retryCount, setRetryCount] = useState(0);
+  const [sessionId] = useState(() => Date.now().toString());
+
+  // Performance optimizations
+  const optimizedMenuItems = useOptimizedMenuItems(menuItems, 'bar');
+  const optimizedCategories = useOptimizedCategories(optimizedMenuItems, 'bar');
+  const optimizedSearchResults = useOptimizedSearch(optimizedMenuItems, searchQuery);
+
+  // Accessibility support
+  const announceToScreenReader = useScreenReaderAnnouncement();
 
   // Initialize component
   useEffect(() => {
+    initializeAccessibility();
     initializeComponent();
+    
+    // Cleanup on unmount
+    return () => {
+      posStateManager.cleanup();
+      posErrorHandler.clearErrorLog();
+    };
   }, []);
+
+  const initializeAccessibility = async () => {
+    try {
+      await posAccessibilityManager.initialize();
+    } catch (error) {
+      console.warn('Accessibility initialization failed (non-critical):', error);
+    }
+  };
 
   const initializeComponent = async () => {
     try {
       setLoading(true);
       setError(null);
+      setNetworkStatus('checking');
       
       // Initialize database first
       await db.initialize();
@@ -81,11 +116,47 @@ export default function Bar() {
       await loadData();
       await loadSettings();
       await initializeAudio();
+      
+      // Load saved POS state
+      await loadPOSState();
+      
+      setNetworkStatus('online');
+      announceToScreenReader('Bar POS system loaded successfully');
     } catch (error) {
-      console.error('Component initialization failed:', error);
-      setError('Failed to initialize bar POS. Please refresh the page.');
+      const posError = posErrorHandler.handleError(error, {
+        component: 'BarPOS',
+        action: 'initializeComponent',
+        timestamp: new Date().toISOString(),
+        additionalData: { sessionId }
+      });
+      
+      setError(posError.message);
+      setNetworkStatus('offline');
+      
+      // Attempt recovery
+      if (posError.retryable && retryCount < 3) {
+        setTimeout(() => {
+          setRetryCount(prev => prev + 1);
+          initializeComponent();
+        }, 2000 * (retryCount + 1));
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPOSState = async () => {
+    try {
+      const savedState = await posStateManager.loadState('bar');
+      if (savedState.cart.length > 0) {
+        setCart(savedState.cart);
+        announceToScreenReader(`Restored ${savedState.cart.length} items from previous session`);
+      }
+      if (savedState.tableNumber) {
+        setTableNumber(savedState.tableNumber);
+      }
+    } catch (error) {
+      console.warn('Failed to load POS state (non-critical):', error);
     }
   };
 
@@ -789,6 +860,7 @@ export default function Bar() {
   }
 
   return (
+    <POSErrorBoundary posType="bar">
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <LinearGradient
@@ -1131,6 +1203,7 @@ export default function Bar() {
         </View>
       </View>
     </SafeAreaView>
+    </POSErrorBoundary>
   );
 }
 

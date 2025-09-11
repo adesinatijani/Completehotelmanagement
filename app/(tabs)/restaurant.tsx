@@ -18,6 +18,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { db } from '@/lib/database';
 import { loadHotelSettings } from '@/lib/storage';
 import { Database } from '@/types/database';
+import { POSErrorBoundary } from '@/components/POSErrorBoundary';
+import { POSValidator, CartItem, POSError, POSErrorType } from '@/lib/pos-validation';
+import { posErrorHandler } from '@/lib/pos-error-handler';
+import { posOrderManager } from '@/lib/pos-order-manager';
+import { posStateManager } from '@/lib/pos-state-manager';
+import { useOptimizedMenuItems, useOptimizedCategories, useOptimizedSearch } from '@/lib/pos-performance';
+import { posAccessibilityManager, useScreenReaderAnnouncement } from '@/lib/pos-accessibility';
 import { ChefHat, Search, User, Trash2, CreditCard, DollarSign, Clock, Receipt, Settings, Users, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, Loader } from 'lucide-react-native';
 import { audioManager } from '@/lib/audio';
 import { currencyManager } from '@/lib/currency';
@@ -49,6 +56,7 @@ const MAX_ORDER_VALUE = 10000;
 const ORDER_TIMEOUT = 30000; // 30 seconds
 
 export default function Restaurant() {
+  // Enhanced state management with proper error handling
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -63,16 +71,43 @@ export default function Restaurant() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
+  const [networkStatus, setNetworkStatus] = useState<'online' | 'offline' | 'checking'>('checking');
+  const [retryCount, setRetryCount] = useState(0);
+  const [sessionId] = useState(() => Date.now().toString());
+
+  // Performance optimizations
+  const optimizedMenuItems = useOptimizedMenuItems(menuItems, 'restaurant');
+  const optimizedCategories = useOptimizedCategories(optimizedMenuItems, 'restaurant');
+  const optimizedSearchResults = useOptimizedSearch(optimizedMenuItems, searchQuery);
+
+  // Accessibility support
+  const announceToScreenReader = useScreenReaderAnnouncement();
 
   // Initialize component
   useEffect(() => {
+    initializeAccessibility();
     initializeComponent();
+    
+    // Cleanup on unmount
+    return () => {
+      posStateManager.cleanup();
+      posErrorHandler.clearErrorLog();
+    };
   }, []);
+
+  const initializeAccessibility = async () => {
+    try {
+      await posAccessibilityManager.initialize();
+    } catch (error) {
+      console.warn('Accessibility initialization failed (non-critical):', error);
+    }
+  };
 
   const initializeComponent = async () => {
     try {
       setLoading(true);
       setError(null);
+      setNetworkStatus('checking');
       
       // Initialize database first
       await db.initialize();
@@ -81,11 +116,47 @@ export default function Restaurant() {
       await loadData();
       await loadSettings();
       await initializeAudio();
+      
+      // Load saved POS state
+      await loadPOSState();
+      
+      setNetworkStatus('online');
+      announceToScreenReader('Restaurant POS system loaded successfully');
     } catch (error) {
-      console.error('Component initialization failed:', error);
-      setError('Failed to initialize restaurant POS. Please refresh the page.');
+      const posError = posErrorHandler.handleError(error, {
+        component: 'RestaurantPOS',
+        action: 'initializeComponent',
+        timestamp: new Date().toISOString(),
+        additionalData: { sessionId }
+      });
+      
+      setError(posError.message);
+      setNetworkStatus('offline');
+      
+      // Attempt recovery
+      if (posError.retryable && retryCount < 3) {
+        setTimeout(() => {
+          setRetryCount(prev => prev + 1);
+          initializeComponent();
+        }, 2000 * (retryCount + 1));
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPOSState = async () => {
+    try {
+      const savedState = await posStateManager.loadState('restaurant');
+      if (savedState.cart.length > 0) {
+        setCart(savedState.cart);
+        announceToScreenReader(`Restored ${savedState.cart.length} items from previous session`);
+      }
+      if (savedState.tableNumber) {
+        setTableNumber(savedState.tableNumber);
+      }
+    } catch (error) {
+      console.warn('Failed to load POS state (non-critical):', error);
     }
   };
 
@@ -239,7 +310,10 @@ export default function Restaurant() {
     try {
       setError(null);
       
-      if (!validateMenuItem(menuItem)) {
+      const validation = POSValidator.validateMenuItem(menuItem);
+      if (!validation.isValid) {
+        setError(validation.error || 'Invalid menu item');
+        announceToScreenReader(`Cannot add item: ${validation.error}`);
         return;
       }
 
@@ -249,7 +323,10 @@ export default function Restaurant() {
       const existingItem = cart.find(item => item.menuItem.id === menuItem.id);
       if (existingItem) {
         const newQuantity = existingItem.quantity + 1;
-        if (!validateQuantity(newQuantity)) {
+        const quantityValidation = POSValidator.validateQuantity(newQuantity);
+        if (!quantityValidation.isValid) {
+          setError(quantityValidation.error || 'Invalid quantity');
+          announceToScreenReader(`Cannot add more: ${quantityValidation.error}`);
           return;
         }
         
@@ -258,12 +335,25 @@ export default function Restaurant() {
             ? { ...item, quantity: newQuantity }
             : item
         ));
+        
+        announceToScreenReader(`Increased ${menuItem.name} to ${newQuantity}`);
       } else {
         setCart([...cart, { menuItem, quantity: 1 }]);
+        announceToScreenReader(`Added ${menuItem.name} to cart`);
       }
+      
+      // Save state
+      posStateManager.updateState({ cart: cart });
     } catch (error) {
-      console.error('Error adding to cart:', error);
-      setError('Failed to add item to cart. Please try again.');
+      const posError = posErrorHandler.handleError(error, {
+        component: 'RestaurantPOS',
+        action: 'addToCart',
+        timestamp: new Date().toISOString(),
+        additionalData: { menuItemId: menuItem.id, menuItemName: menuItem.name }
+      });
+      
+      setError(posError.message);
+      announceToScreenReader(`Error adding item: ${posError.message}`);
     }
   }, [cart]);
 
@@ -419,6 +509,7 @@ export default function Restaurant() {
     // Prevent multiple simultaneous operations
     if (isProcessing) {
       Alert.alert('Please Wait', 'Another operation is in progress...');
+      announceToScreenReader('Please wait, another operation is in progress');
       return;
     }
 
@@ -427,12 +518,23 @@ export default function Restaurant() {
       setError(null);
       
       // Validate cart one more time before payment
-      if (!validateCart()) {
+      const cartValidation = POSValidator.validateCart(cart);
+      if (!cartValidation.isValid) {
+        setError(cartValidation.error || 'Invalid cart');
+        announceToScreenReader(`Cannot process payment: ${cartValidation.error}`);
         setIsProcessing(false);
         return;
       }
       
-      const order = await createOrder(paymentMethod, 'paid');
+      const order = await posOrderManager.createOrder({
+        cart,
+        tableNumber,
+        orderType: 'restaurant',
+        paymentMethod,
+        paymentStatus: 'paid',
+        hotelSettings
+      });
+      
       if (!order) {
         setIsProcessing(false);
         return; // Error already set in createOrder
@@ -441,11 +543,13 @@ export default function Restaurant() {
       // Play success sound
       audioManager.playSound('orderComplete').catch(() => {});
       
-      const { total } = calculateTotal();
+      const totals = posOrderManager.calculateOrderTotal(cart, hotelSettings);
+      
+      announceToScreenReader(`Payment successful for ${posOrderManager.formatCurrency(totals.total)}`);
       
       Alert.alert(
         'Payment Successful! ✅', 
-        `Order #${order.order_number}\nPayment: ${paymentMethod}\nTotal: ${formatCurrency(total)}\n\nOrder sent to kitchen for preparation.`,
+        `Order #${order.order_number}\nPayment: ${paymentMethod}\nTotal: ${posOrderManager.formatCurrency(totals.total)}\n\nOrder sent to kitchen for preparation.`,
         [{ 
           text: 'OK', 
           onPress: () => {
@@ -456,14 +560,21 @@ export default function Restaurant() {
       );
       
     } catch (error) {
-      console.error('Error completing payment:', error);
-      setError(`Payment failed: ${error.message || 'Unknown error'}`);
+      const posError = posErrorHandler.handleError(error, {
+        component: 'RestaurantPOS',
+        action: 'completePayment',
+        timestamp: new Date().toISOString(),
+        additionalData: { paymentMethod, cartItems: cart.length }
+      });
+      
+      setError(posError.message);
+      announceToScreenReader(`Payment failed: ${posError.message}`);
       
       Alert.alert(
         'Payment Failed ❌', 
-        `Failed to process ${paymentMethod} payment. Please try again or use a different payment method.`,
+        posError.message,
         [
-          { text: 'Retry', onPress: () => completePayment(paymentMethod) },
+          ...(posError.retryable ? [{ text: 'Retry', onPress: () => completePayment(paymentMethod) }] : []),
           { text: 'Cancel', style: 'cancel' }
         ]
       );
@@ -702,15 +813,23 @@ export default function Restaurant() {
       setError(null);
       
       if (cart.length === 0) {
-        setError('Cart is already empty.');
+        announceToScreenReader('Cart is already empty');
         return;
       }
       
       audioManager.playSound('buttonClick').catch(() => {});
       setCart([]);
+      posStateManager.clearCart();
+      announceToScreenReader('Cart cleared');
     } catch (error) {
-      console.error('Error clearing cart:', error);
-      setError('Failed to clear cart.');
+      const posError = posErrorHandler.handleError(error, {
+        component: 'RestaurantPOS',
+        action: 'clearCart',
+        timestamp: new Date().toISOString()
+      });
+      
+      setError(posError.message);
+      announceToScreenReader(`Error clearing cart: ${posError.message}`);
     }
   }, [cart]);
 
@@ -758,23 +877,52 @@ export default function Restaurant() {
   }, [menuItems, selectedCategory, searchQuery, categories]);
 
   // Memoized calculations for performance
-  const totals = useMemo(() => calculateTotal(), [calculateTotal]);
+  const totals = useMemo(() => {
+    try {
+      return posOrderManager.calculateOrderTotal(cart, hotelSettings);
+    } catch (error) {
+      console.warn('Error calculating totals:', error);
+      return { subtotal: 0, tax: 0, serviceCharge: 0, total: 0 };
+    }
+  }, [cart, hotelSettings]);
+  
   const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
   const hasItems = cart.length > 0;
+  
+  // Optimized filtered items
+  const filteredItems = useMemo(() => {
+    if (selectedCategory === 'all') {
+      return searchQuery ? optimizedSearchResults : optimizedMenuItems;
+    }
+    
+    const category = optimizedCategories.find(cat => cat.id === selectedCategory);
+    const categoryItems = category ? category.items : [];
+    
+    if (searchQuery) {
+      return categoryItems.filter(item => 
+        item.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    return categoryItems;
+  }, [optimizedMenuItems, optimizedCategories, optimizedSearchResults, selectedCategory, searchQuery]);
 
   if (loading) {
     return (
+      <POSErrorBoundary posType="restaurant">
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#ecf0f1" />
           <Text style={styles.loadingText}>Loading Restaurant POS...</Text>
         </View>
       </SafeAreaView>
+      </POSErrorBoundary>
     );
   }
 
   if (error && !hotelSettings) {
     return (
+      <POSErrorBoundary posType="restaurant">
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
           <AlertTriangle size={48} color="#e74c3c" />
@@ -785,10 +933,12 @@ export default function Restaurant() {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+      </POSErrorBoundary>
     );
   }
 
   return (
+    <POSErrorBoundary posType="restaurant">
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <LinearGradient
@@ -904,13 +1054,17 @@ export default function Restaurant() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.itemsContainer}>
-              {getFilteredItems.map((item) => (
+              {filteredItems.map((item) => (
                 <TouchableOpacity
                   key={item.id}
                   style={styles.menuItemTile}
                   onPress={() => addToCart(item)}
                   disabled={isProcessing}
                   activeOpacity={0.8}
+                  accessible={true}
+                  accessibilityLabel={posAccessibilityManager.generateMenuItemLabel(item)}
+                  accessibilityRole="button"
+                  accessibilityHint="Double tap to add to cart"
                 >
                   <LinearGradient
                     colors={['#e74c3c', '#c0392b']}
@@ -929,7 +1083,7 @@ export default function Restaurant() {
                 </TouchableOpacity>
               ))}
               
-              {getFilteredItems.length === 0 && (
+              {filteredItems.length === 0 && (
                 <View style={styles.noItemsContainer}>
                   <Text style={styles.noItemsText}>
                     {searchQuery ? 'No items found matching your search' : 'No items available in this category'}
@@ -967,6 +1121,9 @@ export default function Restaurant() {
                     <TouchableOpacity 
                       style={styles.removeButton}
                       onPress={() => removeFromCart(item.menuItem.id)}
+                      accessible={true}
+                      accessibilityLabel={`Remove ${item.menuItem.name} from cart`}
+                      accessibilityRole="button"
                     >
                       <Text style={styles.removeButtonText}>✕</Text>
                     </TouchableOpacity>
@@ -987,14 +1144,20 @@ export default function Restaurant() {
                         style={[styles.quantityButton, { opacity: item.quantity <= 1 ? 0.5 : 1 }]}
                         onPress={() => updateQuantity(item.menuItem.id, item.quantity - 1)}
                         disabled={item.quantity <= 1}
+                        accessible={true}
+                        accessibilityLabel={`Decrease quantity of ${item.menuItem.name}`}
+                        accessibilityRole="button"
                       >
                         <Text style={styles.quantityButtonText}>-</Text>
                       </TouchableOpacity>
                       <Text style={styles.quantity}>{item.quantity}</Text>
                       <TouchableOpacity
-                        style={[styles.quantityButton, { opacity: item.quantity >= MAX_QUANTITY ? 0.5 : 1 }]}
+                        style={[styles.quantityButton, { opacity: item.quantity >= POSValidator.MAX_QUANTITY ? 0.5 : 1 }]}
                         onPress={() => updateQuantity(item.menuItem.id, item.quantity + 1)}
-                        disabled={item.quantity >= MAX_QUANTITY}
+                        disabled={item.quantity >= POSValidator.MAX_QUANTITY}
+                        accessible={true}
+                        accessibilityLabel={`Increase quantity of ${item.menuItem.name}`}
+                        accessibilityRole="button"
                       >
                         <Text style={styles.quantityButtonText}>+</Text>
                       </TouchableOpacity>
@@ -1032,7 +1195,13 @@ export default function Restaurant() {
                   )}
                   <View style={[styles.totalRow, styles.grandTotalRow]}>
                     <Text style={styles.grandTotalLabel}>TOTAL:</Text>
-                    <Text style={styles.grandTotalValue}>{formatCurrency(totals.total)}</Text>
+                    <Text 
+                      style={styles.grandTotalValue}
+                      accessible={true}
+                      accessibilityLabel={posAccessibilityManager.generateOrderTotalLabel(totals)}
+                    >
+                      {posOrderManager.formatCurrency(totals.total, hotelSettings?.currency)}
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -1049,6 +1218,9 @@ export default function Restaurant() {
                   onPress={hasItems && !isProcessing ? handleNoReceipt : undefined}
                   disabled={!hasItems || isProcessing}
                   activeOpacity={hasItems && !isProcessing ? 0.7 : 1}
+                  accessible={true}
+                  accessibilityLabel="Complete order without receipt"
+                  accessibilityRole="button"
                 >
                   <Receipt size={16} color="#fff" />
                   <Text style={styles.actionButtonText}>NO RECEIPT</Text>
@@ -1062,6 +1234,9 @@ export default function Restaurant() {
                   onPress={hasItems && !isProcessing ? clearCart : undefined}
                   disabled={!hasItems || isProcessing}
                   activeOpacity={hasItems && !isProcessing ? 0.7 : 1}
+                  accessible={true}
+                  accessibilityLabel="Clear all items from cart"
+                  accessibilityRole="button"
                 >
                   <Trash2 size={16} color="#fff" />
                   <Text style={styles.actionButtonText}>CLEAR</Text>
@@ -1075,6 +1250,9 @@ export default function Restaurant() {
                   onPress={hasItems && !isProcessing ? handlePlaceOrder : undefined}
                   disabled={!hasItems || isProcessing}
                   activeOpacity={hasItems && !isProcessing ? 0.7 : 1}
+                  accessible={true}
+                  accessibilityLabel="Send order to kitchen"
+                  accessibilityRole="button"
                 >
                   {isProcessing ? (
                     <ActivityIndicator size="small" color="#fff" />
@@ -1096,6 +1274,9 @@ export default function Restaurant() {
                   onPress={hasItems && !isProcessing ? handleCashPayment : undefined}
                   disabled={!hasItems || isProcessing}
                   activeOpacity={hasItems && !isProcessing ? 0.7 : 1}
+                  accessible={true}
+                  accessibilityLabel={`Process cash payment for ${posOrderManager.formatCurrency(totals.total, hotelSettings?.currency)}`}
+                  accessibilityRole="button"
                 >
                   <DollarSign size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>CASH</Text>
@@ -1109,6 +1290,9 @@ export default function Restaurant() {
                   onPress={hasItems && !isProcessing ? handleCreditPayment : undefined}
                   disabled={!hasItems || isProcessing}
                   activeOpacity={hasItems && !isProcessing ? 0.7 : 1}
+                  accessible={true}
+                  accessibilityLabel={`Process credit card payment for ${posOrderManager.formatCurrency(totals.total, hotelSettings?.currency)}`}
+                  accessibilityRole="button"
                 >
                   <CreditCard size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>CREDIT</Text>
@@ -1122,6 +1306,9 @@ export default function Restaurant() {
                   onPress={hasItems && !isProcessing ? handleSettle : undefined}
                   disabled={!hasItems || isProcessing}
                   activeOpacity={hasItems && !isProcessing ? 0.7 : 1}
+                  accessible={true}
+                  accessibilityLabel="Show settlement options"
+                  accessibilityRole="button"
                 >
                   <Settings size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>SETTLE</Text>
@@ -1132,6 +1319,7 @@ export default function Restaurant() {
         </View>
       </View>
     </SafeAreaView>
+    </POSErrorBoundary>
   );
 }
 
