@@ -81,6 +81,7 @@ export default function Restaurant() {
   const [receiptOption, setReceiptOption] = useState<'no_receipt' | 'print' | 'email'>('no_receipt');
   const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
   const [pendingOrder, setPendingOrder] = useState<any>(null);
+  const [pendingOrder, setPendingOrder] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -253,6 +254,68 @@ export default function Restaurant() {
       setIsProcessing(false);
     }
   }, [isProcessing, cart, calculateTotals, currentGuest, formatCurrency]);
+
+  const processPayment = useCallback(async (paymentMethod: string) => {
+    console.log('💳 Processing payment with method:', paymentMethod);
+    
+    if (!pendingOrder) {
+      Alert.alert('Error', 'No pending order. Please create an order first.');
+      return;
+    }
+
+    if (isProcessing) {
+      console.log('⏳ Already processing payment, ignoring request');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      // Update order with payment information
+      const finalOrderData = {
+        ...pendingOrder,
+        status: 'confirmed' as const, // Now send to kitchen
+        payment_status: paymentMethod === 'SETTLE' ? 'pending' as const : 'paid' as const,
+        payment_method: paymentMethod.toLowerCase(),
+      };
+      
+      console.log('💾 Saving order to database with payment:', finalOrderData);
+      
+      // Save order to database (now it goes to kitchen)
+      const order = await db.insert('orders', finalOrderData);
+      
+      console.log('✅ Order saved and sent to kitchen:', order);
+
+      // Handle receipt option
+      if (receiptOption === 'print') {
+        Alert.alert('Receipt', `Receipt for order ${pendingOrder.order_number} would be printed`);
+      } else if (receiptOption === 'email') {
+        Alert.alert('Receipt', `Receipt for order ${pendingOrder.order_number} would be emailed to guest`);
+      }
+
+      Alert.alert(
+        'Payment Processed & Order Sent!', 
+        `Order Number: ${pendingOrder.order_number}\nItems: ${cart.length}\nTotal: ${formatCurrency(pendingOrder.total_amount)}\nPayment: ${paymentMethod}\n\n✅ Order sent to kitchen!`,
+        [{ text: 'OK' }]
+      );
+      
+      // Clear everything after successful payment
+      setCart([]);
+      setPendingOrder(null);
+      console.log('🧹 Cart and pending order cleared after successful payment');
+      
+      if (currentGuest < totalGuests) {
+        setCurrentGuest(currentGuest + 1);
+        console.log('👤 Moved to next guest:', currentGuest + 1);
+      }
+      
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      Alert.alert('Error', `Failed to process payment: ${error.message || error}. Please try again.`);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [isProcessing, pendingOrder, cart, receiptOption, formatCurrency, currentGuest, totalGuests]);
 
   const processPayment = useCallback(async (paymentMethod: string) => {
     console.log('💳 Processing payment with method:', paymentMethod);
