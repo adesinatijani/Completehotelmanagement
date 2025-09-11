@@ -14,7 +14,6 @@ import { db } from '@/lib/database';
 import { loadHotelSettings, saveHotelSettings } from '@/lib/storage';
 import { Database } from '@/types/database';
 import { currencyManager } from '@/lib/currency';
-import { db } from '@/lib/database';
 import { 
   Search, 
   CreditCard, 
