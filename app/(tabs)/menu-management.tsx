@@ -95,8 +95,42 @@ export default function MenuManagement() {
   const updateMenuItem = async () => {
     if (!selectedItem) return;
 
+    if (!selectedItem.name || !selectedItem.description || selectedItem.price <= 0) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
     try {
-      await db.update<MenuItem>('menu_items', selectedItem.id, selectedItem);
+      const updateData = {
+        name: selectedItem.name,
+        description: selectedItem.description,
+        category: selectedItem.category,
+        subcategory: selectedItem.subcategory,
+        price: selectedItem.price,
+        cost_price: selectedItem.cost_price,
+        ingredients: selectedItem.ingredients,
+        allergens: selectedItem.allergens,
+        prep_time_minutes: selectedItem.prep_time_minutes,
+        cooking_time_minutes: selectedItem.cooking_time_minutes,
+        difficulty_level: selectedItem.difficulty_level,
+        is_available: selectedItem.is_available,
+        is_vegetarian: selectedItem.is_vegetarian,
+        is_vegan: selectedItem.is_vegan,
+        is_gluten_free: selectedItem.is_gluten_free,
+        calories: selectedItem.calories,
+      };
+      
+      console.log('Updating menu item:', selectedItem.id, 'with data:', updateData);
+      
+      const updatedItem = await db.update<MenuItem>('menu_items', selectedItem.id, updateData);
+      
+      console.log('Menu item updated successfully:', updatedItem);
+      
+      // Update local state immediately
+      setMenuItems(menuItems.map(item => 
+        item.id === selectedItem.id ? { ...item, ...updateData } : item
+      ));
+      
       Alert.alert('Success', 'Menu item updated successfully');
       setEditItemModal(false);
       setSelectedItem(null);
@@ -647,10 +681,20 @@ export default function MenuManagement() {
                   <View style={styles.formGroup}>
                     <Text style={styles.formLabel}>Availability</Text>
                     <View style={styles.switchRow}>
-                      <Text style={styles.switchLabel}>Available for ordering</Text>
+                      <Text style={[styles.switchLabel, { 
+                        color: selectedItem.is_available ? '#16a34a' : '#ef4444',
+                        fontFamily: 'Inter-SemiBold'
+                      }]}>
+                        {selectedItem.is_available ? '✅ Available for ordering' : '❌ Not available for ordering'}
+                      </Text>
                       <Switch
                         value={selectedItem.is_available}
-                        onValueChange={(value) => setSelectedItem({ ...selectedItem, is_available: value })}
+                        onValueChange={(value) => {
+                          console.log('Toggling availability for:', selectedItem.name, 'to:', value);
+                          setSelectedItem({ ...selectedItem, is_available: value });
+                        }}
+                        trackColor={{ false: '#ef4444', true: '#16a34a' }}
+                        thumbColor={selectedItem.is_available ? '#ffffff' : '#f4f3f4'}
                       />
                     </View>
                   </View>
