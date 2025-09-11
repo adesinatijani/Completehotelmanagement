@@ -281,22 +281,14 @@ export default function Restaurant() {
       return;
     }
 
-    Alert.alert(
-      'No Receipt',
-      'Process order without printing receipt?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Process', 
-          onPress: async () => {
-            if (!orderPlaced) {
-              await placeOrder();
-            }
-            await completePayment('No Receipt');
-          }
-        }
-      ]
-    );
+    // Process order immediately without receipt
+    if (!orderPlaced) {
+      placeOrder().then(() => {
+        completePayment('No Receipt');
+      });
+    } else {
+      completePayment('No Receipt');
+    }
   };
 
   const handleSaveOrder = () => {
@@ -306,61 +298,58 @@ export default function Restaurant() {
       return;
     }
 
-    if (orderPlaced) {
-      Alert.alert('Info', 'Order already placed. Please complete payment or start a new order.');
-      return;
+    // Save order with current table number or prompt for one
+    const saveOrderWithTable = async (identifier: string) => {
+      try {
+        const { subtotal, tax } = calculateTotal();
+        const serviceCharge = subtotal * ((hotelSettings?.serviceChargeRate || 0) / 100);
+        const finalTotal = subtotal + tax + serviceCharge;
+        
+        const orderItems = cart.map(item => ({
+          menu_item_id: item.menuItem.id,
+          quantity: item.quantity,
+          unit_price: item.menuItem.price,
+          special_instructions: item.specialInstructions || '',
+        }));
+
+        await db.insert<Order>('orders', {
+          order_number: `R-SAVED-${Date.now()}`,
+          table_number: identifier || 'Saved Order',
+          order_type: 'restaurant',
+          items: orderItems,
+          subtotal,
+          tax_amount: tax,
+          service_charge: serviceCharge,
+          total_amount: finalTotal,
+          status: 'pending',
+          payment_status: 'pending',
+        });
+
+        Alert.alert('Success', `Order saved for ${identifier || 'guest'}`);
+        setCart([]);
+        setTableNumber('');
+        setOrderPlaced(false);
+        setCurrentOrderId(null);
+        loadData();
+      } catch (error) {
+        console.error('Error saving order:', error);
+        Alert.alert('Error', 'Failed to save order');
+      }
+    };
+
+    if (tableNumber) {
+      saveOrderWithTable(tableNumber);
+    } else {
+      Alert.prompt(
+        'Save Order',
+        'Enter table number or guest name:',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Save', onPress: saveOrderWithTable }
+        ],
+        'plain-text'
+      );
     }
-
-
-    Alert.prompt(
-      'Save Order',
-      'Enter table number or guest name:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Save', 
-          onPress: async (identifier) => {
-            try {
-              const { subtotal, tax, total } = calculateTotal();
-              const serviceCharge = subtotal * ((hotelSettings?.serviceChargeRate || 0) / 100);
-              const finalTotal = subtotal + tax + serviceCharge;
-              
-              const orderItems = cart.map(item => ({
-                menu_item_id: item.menuItem.id,
-                quantity: item.quantity,
-                unit_price: item.menuItem.price,
-                special_instructions: item.specialInstructions || '',
-              }));
-
-              await db.insert<Order>('orders', {
-                order_number: `R-SAVED-${Date.now()}`,
-                table_number: identifier || 'Saved Order',
-                order_type: 'restaurant',
-                items: orderItems,
-                subtotal,
-                tax_amount: tax,
-                service_charge: serviceCharge,
-                total_amount: finalTotal,
-                status: 'pending',
-                payment_status: 'pending',
-              });
-
-              Alert.alert('Success', `Order saved for ${identifier || 'guest'}`);
-              setCart([]);
-              setTableNumber('');
-              setOrderPlaced(false);
-              setCurrentOrderId(null);
-              loadData();
-            } catch (error) {
-              console.error('Error saving order:', error);
-              Alert.alert('Error', 'Failed to save order');
-            }
-          }
-        }
-      ],
-      'plain-text',
-      tableNumber || ''
-    );
   };
 
   const handleCashPayment = () => {
@@ -372,30 +361,13 @@ export default function Restaurant() {
 
     const { total } = calculateTotal();
     
+    // Process cash payment immediately
     if (!orderPlaced) {
-      Alert.alert(
-        'Cash Payment',
-        `Total: ${formatCurrency(total)}\n\nPlace order and process cash payment?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Process Payment', 
-            onPress: async () => {
-              await placeOrder();
-              await completePayment('Cash');
-            }
-          }
-        ]
-      );
+      placeOrder().then(() => {
+        completePayment('Cash');
+      });
     } else {
-      Alert.alert(
-        'Cash Payment',
-        `Total: ${formatCurrency(total)}\n\nProcess cash payment?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Process Payment', onPress: () => completePayment('Cash') }
-        ]
-      );
+      completePayment('Cash');
     }
   };
 
@@ -408,30 +380,13 @@ export default function Restaurant() {
 
     const { total } = calculateTotal();
     
+    // Process credit payment immediately
     if (!orderPlaced) {
-      Alert.alert(
-        'Credit Card Payment',
-        `Total: ${formatCurrency(total)}\n\nPlace order and process credit card payment?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Process Payment', 
-            onPress: async () => {
-              await placeOrder();
-              await completePayment('Credit Card');
-            }
-          }
-        ]
-      );
+      placeOrder().then(() => {
+        completePayment('Credit Card');
+      });
     } else {
-      Alert.alert(
-        'Credit Card Payment',
-        `Total: ${formatCurrency(total)}\n\nProcess credit card payment?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Process Payment', onPress: () => completePayment('Credit Card') }
-        ]
-      );
+      completePayment('Credit Card');
     }
   };
 
@@ -450,6 +405,32 @@ export default function Restaurant() {
         { text: 'Room Charge', onPress: () => handleRoomCharge() },
         { text: 'Comp/Free', onPress: () => handleComplimentary() },
         { text: 'Split Bill', onPress: () => handleSplitBill() }
+      ]
+    );
+  };
+
+  const clearCart = () => {
+    playButtonClick();
+    if (cart.length === 0) {
+      Alert.alert('Info', 'Cart is already empty');
+      return;
+    }
+
+    Alert.alert(
+      'Clear Cart',
+      'Remove all items from cart?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear', 
+          style: 'destructive',
+          onPress: () => {
+            setCart([]);
+            setOrderPlaced(false);
+            setCurrentOrderId(null);
+            Alert.alert('Success', 'Cart cleared');
+          }
+        }
       ]
     );
   };
@@ -674,18 +655,20 @@ export default function Restaurant() {
                   style={[styles.actionButton, { backgroundColor: '#95a5a6' }]}
                   onPress={handleNoReceipt}
                   activeOpacity={0.7}
+                  activeOpacity={0.7}
                 >
                   <Receipt size={16} color="#fff" />
                   <Text style={styles.actionButtonText}>NO RECEIPT</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity 
-                  style={[styles.actionButton, { backgroundColor: '#3498db' }]}
-                  onPress={handleSaveOrder}
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#f39c12' }]}
+                  onPress={clearCart}
                   activeOpacity={0.7}
                 >
-                  <Clock size={16} color="#fff" />
-                  <Text style={styles.actionButtonText}>SAVE</Text>
+                  <Trash2 size={16} color="#fff" />
+                  <Text style={styles.actionButtonText}>CLEAR</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity 
@@ -694,6 +677,8 @@ export default function Restaurant() {
                     { backgroundColor: cart.length > 0 ? '#27ae60' : '#95a5a6' }
                   ]}
                   onPress={cart.length > 0 ? placeOrder : undefined}
+                  disabled={cart.length === 0}
+                  activeOpacity={0.7}
                   disabled={cart.length === 0}
                   activeOpacity={0.7}
                 >
@@ -708,11 +693,13 @@ export default function Restaurant() {
                   style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
                   onPress={handleCashPayment}
                   activeOpacity={0.7}
+                  activeOpacity={0.7}
                 >
                   <DollarSign size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>CASH</Text>
                 </TouchableOpacity>
 
+                <TouchableOpacity 
                 <TouchableOpacity 
                   style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
                   onPress={handleCreditPayment}
@@ -722,6 +709,7 @@ export default function Restaurant() {
                   <Text style={styles.paymentButtonText}>CREDIT</Text>
                 </TouchableOpacity>
 
+                <TouchableOpacity 
                 <TouchableOpacity 
                   style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
                   onPress={handleSettle}
