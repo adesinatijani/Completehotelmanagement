@@ -102,7 +102,7 @@ export default function Restaurant() {
       
       // Filter for restaurant items (food categories)
       const restaurantItems = menuData.filter(item => 
-        item.is_available && ['appetizer', 'main_course', 'dessert', 'beverage'].includes(item.category)
+        item.is_available && ['appetizer', 'main_course', 'dessert', 'beverage', 'coffee', 'tea', 'juice', 'water'].includes(item.category)
       );
       
       console.log('🍽️ Restaurant items (available only):', restaurantItems.length);

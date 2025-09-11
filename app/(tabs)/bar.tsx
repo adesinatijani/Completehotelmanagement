@@ -102,7 +102,7 @@ export default function Bar() {
       console.log('📊 Total menu items loaded:', menuData.length);
       
       const barItems = menuData.filter(item => 
-        ['wine', 'cocktail', 'beer', 'beverage', 'spirits', 'coffee', 'tea', 'juice', 'water'].includes(item.category)
+        item.is_available && ['wine', 'cocktail', 'beer', 'beverage', 'spirits', 'coffee', 'tea', 'juice', 'water'].includes(item.category)
       );
       
       console.log('🍷 Bar items filtered:', barItems.length);
