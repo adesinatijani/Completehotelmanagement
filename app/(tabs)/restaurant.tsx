@@ -78,6 +78,7 @@ export default function Restaurant() {
   const [serverName] = useState('WALDO T');
   const [hotelSettings, setHotelSettings] = useState<any>(null);
   const [receiptOption, setReceiptOption] = useState<'no_receipt' | 'print' | 'email'>('no_receipt');
+  const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
 
   useEffect(() => {
     loadData();
@@ -350,7 +351,7 @@ export default function Restaurant() {
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, cart, receiptOption, formatCurrency, currentGuest, totalGuests, calculateTotals]);
+  }, [isProcessing, cart, receiptOption, formatCurrency, currentGuest, totalGuests, calculateTotals, user]);
 
   const saveOrder = useCallback(() => {
     console.log('💾 Saving order for Guest', currentGuest);
@@ -440,13 +441,11 @@ export default function Restaurant() {
           style: 'destructive',
           onPress: () => {
             setCart([]);
-            Alert.alert('Order Cancelled', 'All items have been removed from the cart');
           }
         }
       ]
     );
   }, [cart, calculateTotals, formatCurrency]);
-
 
   return (
     <SafeAreaView style={styles.container}>
