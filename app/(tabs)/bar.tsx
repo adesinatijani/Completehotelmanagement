@@ -95,9 +95,7 @@ export default function Bar() {
       setLoading(true);
       console.log('🔄 Loading bar menu data...');
       await db.initialize();
-      const menuData = await db.select<MenuItem>('menu_items', {
-        filters: { is_available: true }
-      });
+      const menuData = await db.select<MenuItem>('menu_items');
       
       console.log('📊 Total menu items loaded:', menuData.length);
       
@@ -105,7 +103,8 @@ export default function Bar() {
         item.is_available && ['wine', 'cocktail', 'beer', 'beverage', 'spirits', 'coffee', 'tea', 'juice', 'water'].includes(item.category)
       );
       
-      console.log('🍷 Bar items filtered:', barItems.length);
+      console.log('🍷 Bar items filtered (available only):', barItems.length);
+      console.log('🍺 Beer items specifically:', barItems.filter(item => item.category === 'beer').length);
       setMenuItems(barItems);
     } catch (error) {
       console.error('Error loading menu items:', error);
