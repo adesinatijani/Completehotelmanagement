@@ -306,6 +306,24 @@ export default function Restaurant() {
       
       console.log('✅ Order saved and sent to kitchen:', order);
 
+      // Create financial transaction for accounting
+      try {
+        await db.insert('transactions', {
+          transaction_number: `TXN-${orderNumber}`,
+          type: 'income',
+          category: 'food_beverage',
+          amount: totals.total,
+          description: `Restaurant order - ${paymentMethod} payment`,
+          reference_id: order.id,
+          payment_method: paymentMethod.toLowerCase(),
+          transaction_date: new Date().toISOString().split('T')[0],
+          processed_by: user?.id || 'pos_system',
+        });
+        console.log('✅ Financial transaction recorded for restaurant order');
+      } catch (transactionError) {
+        console.warn('Failed to record financial transaction (non-critical):', transactionError);
+      }
+
       // Handle receipt option
       if (receiptOption === 'print') {
         Alert.alert('Receipt', `Receipt for order ${orderNumber} would be printed`);

@@ -285,6 +285,24 @@ export default function Bar() {
       
       console.log('✅ Order saved and sent to bar:', order);
 
+      // Create financial transaction for accounting
+      try {
+        await db.insert('transactions', {
+          transaction_number: `TXN-${pendingOrder.order_number}`,
+          type: 'income',
+          category: 'food_beverage',
+          amount: pendingOrder.total_amount,
+          description: `Bar order - ${paymentMethod} payment`,
+          reference_id: order.id,
+          payment_method: paymentMethod.toLowerCase(),
+          transaction_date: new Date().toISOString().split('T')[0],
+          processed_by: user?.id || 'pos_system',
+        });
+        console.log('✅ Financial transaction recorded for bar order');
+      } catch (transactionError) {
+        console.warn('Failed to record financial transaction (non-critical):', transactionError);
+      }
+
       // Handle receipt option
       if (receiptOption === 'print') {
         Alert.alert('Receipt', `Bar receipt for order ${pendingOrder.order_number} would be printed`);

@@ -83,11 +83,16 @@ export default function Analytics() {
         .filter(t => t.type === 'income' && t.category === 'food_beverage')
         .reduce((sum, t) => sum + t.amount, 0);
 
+      // Also include direct order revenue (POS sales)
+      const directOrderRevenue = orders
+        .filter(o => o.payment_status === 'paid')
+        .reduce((sum, o) => sum + o.total_amount, 0);
+
       const hallRevenue = transactions
         .filter(t => t.type === 'income' && t.category === 'hall_revenue')
         .reduce((sum, t) => sum + t.amount, 0);
 
-      const totalRevenue = roomRevenue + foodBeverageRevenue + hallRevenue;
+      const totalRevenue = roomRevenue + foodBeverageRevenue + directOrderRevenue + hallRevenue;
       const totalExpenses = transactions
         .filter(t => t.type === 'expense')
         .reduce((sum, t) => sum + t.amount, 0);

@@ -113,13 +113,18 @@ export default function Accounting() {
       // Calculate financial metrics
       const roomRevenue = bookings.reduce((sum, booking) => sum + booking.total_amount, 0);
       
-      const foodOrders = orders.filter(order => order.order_type === 'restaurant');
-      const barOrders = orders.filter(order => order.order_type === 'bar');
+      const foodOrders = orders.filter(order => ['restaurant', 'room_service'].includes(order.order_type));
+      const barOrders = orders.filter(order => ['bar', 'pool_bar'].includes(order.order_type));
       
       const foodRevenue = foodOrders.reduce((sum, order) => sum + order.total_amount, 0);
       const barRevenue = barOrders.reduce((sum, order) => sum + order.total_amount, 0);
       
-      const totalRevenue = roomRevenue + foodRevenue + barRevenue;
+      // Also include revenue from transactions table (POS sales)
+      const posRevenue = transactions
+        .filter(t => t.type === 'income' && t.category === 'food_beverage')
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const totalRevenue = roomRevenue + foodRevenue + barRevenue + posRevenue;
       const totalExpenses = transactions
         .filter(t => t.type === 'expense')
         .reduce((sum, t) => sum + t.amount, 0);
@@ -159,6 +164,15 @@ export default function Accounting() {
           date: order.created_at,
           description: `${order.order_type} order`,
         })),
+        ...transactions
+          .filter(t => t.type === 'income')
+          .map(transaction => ({
+            id: transaction.id,
+            type: transaction.category === 'food_beverage' ? 'POS Sale' : 'Other Revenue',
+            amount: transaction.amount,
+            date: transaction.created_at,
+            description: transaction.description,
+          })),
       ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       setRecentTransactions(recentTransactionsList.slice(0, 10));
