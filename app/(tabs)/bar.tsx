@@ -300,12 +300,6 @@ export default function Bar() {
         console.warn('Failed to record financial transaction (non-critical):', transactionError);
       }
 
-        });
-        console.log('✅ Financial transaction recorded for bar order');
-      } catch (transactionError) {
-        console.warn('Failed to record financial transaction (non-critical):', transactionError);
-      }
-
       // Handle receipt option
       if (receiptOption === 'print') {
         Alert.alert('Receipt', `Bar receipt for order ${pendingOrder.order_number} would be printed`);
@@ -335,7 +329,7 @@ export default function Bar() {
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, pendingOrder, cart, receiptOption, formatCurrency, currentGuest, totalGuests]);
+  }, [isProcessing, pendingOrder, cart, receiptOption, formatCurrency, currentGuest, totalGuests, user?.id]);
 
   const saveOrder = useCallback(() => {
     console.log('💾 Saving bar order for Guest', currentGuest);
