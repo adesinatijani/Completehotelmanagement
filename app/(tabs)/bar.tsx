@@ -659,6 +659,7 @@ export default function Bar() {
                   <Text style={styles.actionButtonText}>NO RECEIPT</Text>
                 </TouchableOpacity>
 
+                <TouchableOpacity 
                   style={[styles.actionButton, { backgroundColor: '#f39c12' }]}
                   onPress={clearCart}
                   activeOpacity={0.7}
