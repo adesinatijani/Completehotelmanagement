@@ -184,13 +184,13 @@ export default function Bar() {
   };
 
   const placeOrder = async () => {
-    playButtonClick();
     if (cart.length === 0) {
       Alert.alert('Error', 'Cart is empty');
       return;
     }
 
     try {
+      playButtonClick();
       const { subtotal, tax, total } = calculateTotal();
       const serviceCharge = subtotal * ((hotelSettings?.serviceChargeRate || 0) / 100);
       const finalTotal = subtotal + tax + serviceCharge;
@@ -216,9 +216,7 @@ export default function Bar() {
         payment_status: 'pending',
       });
 
-      setOrderPlaced(true);
-      setCurrentOrderId(newOrder.id);
-      Alert.alert('Success', 'Order placed! Please select payment method to complete.');
+      Alert.alert('Success', 'Order sent to bar! Please select payment method.');
     } catch (error) {
       console.error('Error placing order:', error);
       Alert.alert('Error', 'Failed to place order');
@@ -226,47 +224,45 @@ export default function Bar() {
   };
 
   const completePayment = async (paymentMethod: string) => {
-    if (!currentOrderId) return;
+    if (cart.length === 0) {
+      Alert.alert('Error', 'Cart is empty');
+      return;
+    }
 
     try {
-      // Update order payment status
-      await db.update<Order>('orders', currentOrderId, {
-        payment_status: 'paid',
+      // Place order with payment
+      const { subtotal, tax, total } = calculateTotal();
+      const serviceCharge = subtotal * ((hotelSettings?.serviceChargeRate || 0) / 100);
+      const finalTotal = subtotal + tax + serviceCharge;
+      
+      const orderItems = cart.map(item => ({
+        menu_item_id: item.menuItem.id,
+        quantity: item.quantity,
+        unit_price: item.menuItem.price,
+        special_instructions: item.specialInstructions || '',
+      }));
+
+      const orderNumber = `B-${Date.now()}`;
+      await db.insert<Order>('orders', {
+        order_number: orderNumber,
+        table_number: tableNumber || 'Bar Service',
+        order_type: 'bar',
+        items: orderItems,
+        subtotal,
+        tax_amount: tax,
+        service_charge: serviceCharge,
+        total_amount: finalTotal,
         status: 'confirmed',
+        payment_status: 'paid',
       });
 
       playOrderComplete();
-      
-      // Print receipt if printer available
-      try {
-        const { subtotal, tax, serviceCharge, total } = calculateTotal();
-        await receiptPrinter.printOrderReceipt({
-          order_number: `B-${Date.now()}`,
-          order_type: 'bar',
-          items: cart.map(item => ({
-            menu_item_id: item.menuItem.id,
-            quantity: item.quantity,
-            unit_price: item.menuItem.price,
-            special_instructions: item.specialInstructions || '',
-          })),
-          subtotal,
-          tax_amount: tax,
-          service_charge: serviceCharge,
-          total_amount: total,
-          created_at: new Date().toISOString(),
-          table_number: tableNumber,
-        }, hotelSettings?.currency || 'USD', hotelSettings);
-      } catch (printError) {
-        console.warn('Print failed:', printError);
-      }
       
       Alert.alert('Payment Complete', `${paymentMethod} payment processed successfully`);
       
       // Clear cart and reset state
       setCart([]);
       setTableNumber('');
-      setOrderPlaced(false);
-      setCurrentOrderId(null);
       loadData();
     } catch (error) {
       console.error('Error completing payment:', error);
@@ -274,128 +270,54 @@ export default function Bar() {
     }
   };
   const handleNoReceipt = () => {
-    playButtonClick();
     if (cart.length === 0) {
       Alert.alert('Error', 'Cart is empty');
       return;
     }
 
-    // Process order immediately without receipt
-    if (!orderPlaced) {
-      placeOrder().then(() => {
-        completePayment('No Receipt');
-      });
-    } else {
-      completePayment('No Receipt');
-    }
+    completePayment('No Receipt');
   };
 
-  const handleSaveOrder = () => {
-    playButtonClick();
+  const handleSaveOrder = async () => {
     if (cart.length === 0) {
       Alert.alert('Error', 'Cart is empty');
       return;
     }
 
-    // Save order with current table number or prompt for one
-    const saveOrderWithTable = async (identifier: string) => {
-      try {
-        const { subtotal, tax } = calculateTotal();
-        const serviceCharge = subtotal * ((hotelSettings?.serviceChargeRate || 0) / 100);
-        const finalTotal = subtotal + tax + serviceCharge;
-        
-        const orderItems = cart.map(item => ({
-          menu_item_id: item.menuItem.id,
-          quantity: item.quantity,
-          unit_price: item.menuItem.price,
-          special_instructions: item.specialInstructions || '',
-        }));
-
-        await db.insert<Order>('orders', {
-          order_number: `B-SAVED-${Date.now()}`,
-          table_number: identifier || 'Saved Order',
-          order_type: 'bar',
-          items: orderItems,
-          subtotal,
-          tax_amount: tax,
-          service_charge: serviceCharge,
-          total_amount: finalTotal,
-          status: 'pending',
-          payment_status: 'pending',
-        });
-
-        Alert.alert('Success', `Order saved for ${identifier || 'guest'}`);
-        setCart([]);
-        setTableNumber('');
-        setOrderPlaced(false);
-        setCurrentOrderId(null);
-        loadData();
-      } catch (error) {
-        console.error('Error saving order:', error);
-        Alert.alert('Error', 'Failed to save order');
-      }
-    };
-
-    if (tableNumber) {
-      saveOrderWithTable(tableNumber);
-    } else {
-      Alert.prompt(
-        'Save Order',
-        'Enter table number or guest name:',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Save', onPress: saveOrderWithTable }
-        ],
-        'plain-text'
-      );
+    try {
+      playButtonClick();
+      await placeOrder();
+      Alert.alert('Success', 'Order saved and sent to bar!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save order');
     }
   };
 
   const handleCashPayment = () => {
-    playButtonClick();
     if (cart.length === 0) {
       Alert.alert('Error', 'Cart is empty');
       return;
     }
 
-    const { total } = calculateTotal();
-    
-    // Process cash payment immediately
-    if (!orderPlaced) {
-      placeOrder().then(() => {
-        completePayment('Cash');
-      });
-    } else {
-      completePayment('Cash');
-    }
+    completePayment('Cash');
   };
 
   const handleCreditPayment = () => {
-    playButtonClick();
     if (cart.length === 0) {
       Alert.alert('Error', 'Cart is empty');
       return;
     }
 
-    const { total } = calculateTotal();
-    
-    // Process credit payment immediately
-    if (!orderPlaced) {
-      placeOrder().then(() => {
-        completePayment('Credit Card');
-      });
-    } else {
-      completePayment('Credit Card');
-    }
+    completePayment('Credit Card');
   };
 
   const handleSettle = () => {
-    playButtonClick();
     if (cart.length === 0) {
       Alert.alert('Error', 'Cart is empty');
       return;
     }
 
+    playButtonClick();
     Alert.alert(
       'Settle Order',
       'Choose settlement option:',
@@ -409,12 +331,12 @@ export default function Bar() {
   };
 
   const clearCart = () => {
-    playButtonClick();
     if (cart.length === 0) {
       Alert.alert('Info', 'Cart is already empty');
       return;
     }
 
+    playButtonClick();
     Alert.alert(
       'Clear Cart',
       'Remove all items from cart?',
@@ -425,8 +347,6 @@ export default function Bar() {
           style: 'destructive',
           onPress: () => {
             setCart([]);
-            setOrderPlaced(false);
-            setCurrentOrderId(null);
             Alert.alert('Success', 'Cart cleared');
           }
         }
@@ -435,10 +355,7 @@ export default function Bar() {
   };
 
   const handleRoomCharge = async () => {
-    if (!orderPlaced) {
-      await placeOrder();
-    }
-    await completePayment('Room Charge');
+    completePayment('Room Charge');
   };
 
   const handleComplimentary = async () => {
@@ -450,10 +367,7 @@ export default function Bar() {
         { 
           text: 'Confirm', 
           onPress: async () => {
-            if (!orderPlaced) {
-              await placeOrder();
-            }
-            await completePayment('Complimentary');
+            completePayment('Complimentary');
           }
         }
       ]
@@ -673,12 +587,12 @@ export default function Bar() {
                     styles.actionButton, 
                     { backgroundColor: cart.length > 0 ? '#27ae60' : '#95a5a6' }
                   ]}
-                  onPress={cart.length > 0 ? placeOrder : undefined}
+                  onPress={cart.length > 0 ? handleSaveOrder : undefined}
                   disabled={cart.length === 0}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.actionButtonText}>
-                    {orderPlaced ? 'ORDER PLACED' : 'ORDER'}
+                    ORDER
                   </Text>
                 </TouchableOpacity>
               </View>
