@@ -62,6 +62,13 @@ export default function Restaurant() {
   useEffect(() => {
     loadData();
     loadSettings();
+    
+    // Listen for menu updates from Menu Management
+    const interval = setInterval(() => {
+      loadData();
+    }, 5000); // Refresh every 5 seconds to pick up new menu items
+    
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
