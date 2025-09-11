@@ -17,6 +17,8 @@ import { db } from '@/lib/database';
 import { Database } from '@/types/database';
 import { loadHotelSettings } from '@/lib/storage';
 import { currencyManager } from '@/lib/currency';
+import { POSValidator, CartItem } from '@/lib/pos-validation';
+import { posOrderManager } from '@/lib/pos-order-manager';
 import { 
   ChefHat, 
   Plus, 
@@ -36,12 +38,6 @@ type MenuItem = Database['public']['Tables']['menu_items']['Row'];
 
 const { width, height } = Dimensions.get('window');
 
-interface CartItem {
-  menuItem: MenuItem;
-  quantity: number;
-  specialInstructions?: string;
-}
-
 export default function Restaurant() {
   const { user } = useAuthContext();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -55,6 +51,8 @@ export default function Restaurant() {
   const [totalGuests] = useState(3);
   const [serverName] = useState('WALDO T');
   const [hotelSettings, setHotelSettings] = useState<any>(null);
+  const [receiptOption, setReceiptOption] = useState<'no_receipt' | 'print' | 'email'>('no_receipt');
+  const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
 
   useEffect(() => {
     loadData();
@@ -197,33 +195,33 @@ export default function Restaurant() {
   const processOrder = async (paymentMethod: string) => {
     if (isProcessing || cart.length === 0) return;
     
+    // Validate cart before processing
+    const cartValidation = POSValidator.validateCart(cart);
+    if (!cartValidation.isValid) {
+      Alert.alert('Order Error', cartValidation.error || 'Invalid order');
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
-      const orderNumber = `R-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      
-      const orderItems = cart.map(item => ({
-        menu_item_id: item.menuItem.id,
-        quantity: item.quantity,
-        unit_price: item.menuItem.price,
-        special_instructions: item.specialInstructions || '',
-      }));
-
-      await db.insert('orders', {
-        order_number: orderNumber,
-        table_number: `Guest ${currentGuest}`,
-        order_type: 'restaurant',
-        items: orderItems,
-        subtotal: calculateTotals.subtotal,
-        tax_amount: calculateTotals.tax,
-        service_charge: 0,
-        total_amount: calculateTotals.total,
-        status: 'confirmed',
-        payment_status: paymentMethod === 'ROOM CHARGE' ? 'pending' : 'paid',
-        payment_method: paymentMethod.toLowerCase().replace(/\s+/g, '_'),
+      const order = await posOrderManager.createOrder({
+        cart,
+        tableNumber: `Guest ${currentGuest}`,
+        orderType: 'restaurant',
+        paymentMethod: paymentMethod.toLowerCase(),
+        paymentStatus: paymentMethod === 'SETTLE' ? 'pending' : 'paid',
+        hotelSettings,
       });
 
-      Alert.alert('Success', `Order ${orderNumber} placed successfully!`);
+      // Handle receipt option
+      if (receiptOption === 'print') {
+        Alert.alert('Receipt', 'Receipt would be printed');
+      } else if (receiptOption === 'email') {
+        Alert.alert('Receipt', 'Receipt would be emailed to guest');
+      }
+
+      Alert.alert('Success', `Order ${order.order_number} placed successfully!`);
       
       // Clear cart and move to next guest
       setCart([]);
@@ -244,9 +242,50 @@ export default function Restaurant() {
       Alert.alert('Info', 'No items to save');
       return;
     }
-    Alert.alert('Success', 'Order saved for later');
+    
+    setSavedOrders(prev => [...prev, [...cart]]);
+    setCart([]);
+    Alert.alert('Success', `Order saved for Guest ${currentGuest}. You can recall it later.`);
   };
 
+  const recallOrder = () => {
+    if (savedOrders.length === 0) {
+      Alert.alert('Info', 'No saved orders to recall');
+      return;
+    }
+    
+    Alert.alert(
+      'Recall Order',
+      `Recall saved order? This will replace current cart.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Recall', 
+          onPress: () => {
+            const lastSavedOrder = savedOrders[savedOrders.length - 1];
+            setCart(lastSavedOrder);
+            setSavedOrders(prev => prev.slice(0, -1));
+            Alert.alert('Success', 'Order recalled successfully');
+          }
+        }
+      ]
+    );
+  };
+
+  const toggleReceiptOption = () => {
+    const options: Array<'no_receipt' | 'print' | 'email'> = ['no_receipt', 'print', 'email'];
+    const currentIndex = options.indexOf(receiptOption);
+    const nextIndex = (currentIndex + 1) % options.length;
+    setReceiptOption(options[nextIndex]);
+  };
+
+  const getReceiptButtonText = () => {
+    switch (receiptOption) {
+      case 'no_receipt': return 'NO RECEIPT';
+      case 'print': return 'PRINT RECEIPT';
+      case 'email': return 'EMAIL RECEIPT';
+    }
+  };
   const cancelOrder = () => {
     if (cart.length === 0) return;
     
@@ -352,9 +391,9 @@ export default function Restaurant() {
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.actionButton} onPress={() => Alert.alert('Info', 'No receipt option selected')}>
+            <TouchableOpacity style={styles.actionButton} onPress={toggleReceiptOption}>
               <Receipt size={20} color="#64748b" />
-              <Text style={styles.actionButtonText}>NO RECEIPT</Text>
+              <Text style={styles.actionButtonText}>{getReceiptButtonText()}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.actionButton} onPress={saveOrder}>
@@ -368,7 +407,9 @@ export default function Restaurant() {
               disabled={cart.length === 0 || isProcessing}
             >
               <ChefHat size={20} color="white" />
-              <Text style={[styles.actionButtonText, styles.orderButtonText]}>ORDER</Text>
+              <Text style={[styles.actionButtonText, styles.orderButtonText]}>
+                {isProcessing ? 'PROCESSING...' : 'ORDER'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -404,10 +445,10 @@ export default function Restaurant() {
 
           {/* Bottom Actions */}
           <View style={styles.bottomActions}>
-            <TouchableOpacity style={styles.bottomButton}>
+            <TouchableOpacity style={styles.bottomButton} onPress={recallOrder}>
               <Text style={styles.bottomButtonText}>RECALL</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.bottomButton}>
+            <TouchableOpacity style={styles.bottomButton} onPress={() => Alert.alert('Logout', 'Logout functionality')}>
               <Text style={styles.bottomButtonText}>LOGOUT</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.bottomButton} onPress={cancelOrder}>
