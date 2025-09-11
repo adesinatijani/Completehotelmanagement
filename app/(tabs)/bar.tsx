@@ -326,9 +326,6 @@ export default function Bar() {
     } catch (error) {
       console.error('Error processing payment:', error);
       Alert.alert('Error', `Failed to process payment: ${error.message || error}. Please try again.`);
-    } catch (error) {
-      console.error('Error processing payment:', error);
-      Alert.alert('Error', `Failed to process payment: ${error.message || error}. Please try again.`);
     } finally {
       setIsProcessing(false);
     }
