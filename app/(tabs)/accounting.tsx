@@ -173,6 +173,15 @@ export default function Accounting() {
             date: transaction.created_at,
             description: transaction.description,
           })),
+        ...transactions
+          .filter(t => t.type === 'income')
+          .map(transaction => ({
+            id: transaction.id,
+            type: transaction.category === 'food_beverage' ? 'POS Sale' : 'Other Revenue',
+            amount: transaction.amount,
+            date: transaction.created_at,
+            description: transaction.description,
+          })),
       ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       setRecentTransactions(recentTransactionsList.slice(0, 10));
