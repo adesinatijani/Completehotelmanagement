@@ -80,6 +80,7 @@ export default function Restaurant() {
   const [receiptOption, setReceiptOption] = useState<'no_receipt' | 'print' | 'email'>('no_receipt');
   const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
   const [pendingOrder, setPendingOrder] = useState<any>(null);
+  const [pendingOrder, setPendingOrder] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -245,6 +246,7 @@ export default function Restaurant() {
       );
       
       // Don't clear cart yet - wait for payment
+      
     } catch (error) {
       console.error('Error creating order:', error);
       Alert.alert('Error', `Failed to create order: ${error.message || error}. Please try again.`);
