@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '@/lib/supabase';
+import { db } from '@/lib/database';
 import { Database } from '@/types/database';
 import { ExcelImporter } from '@/components/ExcelImporter';
 import { ExcelTemplateDownloader } from '@/components/ExcelTemplateDownloader';

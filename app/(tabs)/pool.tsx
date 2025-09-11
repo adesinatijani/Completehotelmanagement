@@ -9,7 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
+import { db } from '@/lib/database';
 import { Database } from '@/types/database';
 import { ExcelTemplateDownloader } from '@/components/ExcelTemplateDownloader';
 import { Waves, Thermometer, Users, Clock, TriangleAlert as AlertTriangle } from 'lucide-react-native';

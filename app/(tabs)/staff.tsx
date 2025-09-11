@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '@/lib/supabase';
+import { db } from '@/lib/database';
 import { ExcelTemplateDownloader } from '@/components/ExcelTemplateDownloader';
 import { Database } from '@/types/database';
 import { Users, Plus, Search, Mail, Shield, CreditCard as Edit, Star, Sparkles, UserCheck } from 'lucide-react-native';
