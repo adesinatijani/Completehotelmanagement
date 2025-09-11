@@ -77,7 +77,6 @@ export default function Bar() {
   const [hotelSettings, setHotelSettings] = useState<any>(null);
   const [receiptOption, setReceiptOption] = useState<'no_receipt' | 'print' | 'email'>('no_receipt');
   const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
-  const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
   
   useEffect(() => {
     loadData();
