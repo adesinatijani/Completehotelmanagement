@@ -87,18 +87,31 @@ export default function Restaurant() {
       setLoading(true);
       console.log('🔄 Loading restaurant menu data...');
       await db.initialize();
-      const menuData = await db.select<MenuItem>('menu_items', {
-        filters: { is_available: true }
-      });
       
-      console.log('📊 Total menu items loaded:', menuData.length);
+      // Load all available menu items from database
+      const menuData = await db.select<MenuItem>('menu_items');
+      console.log('📊 All menu items loaded:', menuData.length);
       
+      // Filter for restaurant items (food categories)
       const restaurantItems = menuData.filter(item => 
-        ['appetizer', 'main_course', 'dessert', 'beverage'].includes(item.category)
+        item.is_available && ['appetizer', 'main_course', 'dessert', 'beverage'].includes(item.category)
       );
       
-      console.log('🍽️ Restaurant items filtered:', restaurantItems.length);
+      console.log('🍽️ Restaurant items (available only):', restaurantItems.length);
       setMenuItems(restaurantItems);
+      
+      // If no menu items found, load sample data
+      if (restaurantItems.length === 0) {
+        console.log('📋 No menu items found, loading sample data...');
+        await sampleDataLoader.loadSampleMenuData();
+        // Reload after sample data
+        const newMenuData = await db.select<MenuItem>('menu_items');
+        const newRestaurantItems = newMenuData.filter(item => 
+          item.is_available && ['appetizer', 'main_course', 'dessert', 'beverage'].includes(item.category)
+        );
+        setMenuItems(newRestaurantItems);
+        console.log('✅ Sample data loaded, restaurant items:', newRestaurantItems.length);
+      }
     } catch (error) {
       console.error('Error loading menu items:', error);
       Alert.alert('Error', 'Failed to load menu items. Please check your connection and try again.');
