@@ -9,20 +9,14 @@ import {
   Alert,
   RefreshControl,
   Dimensions,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { db } from '@/lib/database';
 import { Database } from '@/types/database';
-import { ExcelTemplateDownloader } from '@/components/ExcelTemplateDownloader';
-import { POSErrorBoundary } from '@/components/POSErrorBoundary';
 import { loadHotelSettings } from '@/lib/storage';
 import { currencyManager } from '@/lib/currency';
-import { audioManager, playButtonClick, playAddToCart, playOrderComplete } from '@/lib/audio';
-import { POSValidator, CartItem as ValidatedCartItem } from '@/lib/pos-validation';
-import { posOrderManager } from '@/lib/pos-order-manager';
 import { 
   Wine, 
   Plus, 
@@ -33,16 +27,21 @@ import {
   DollarSign, 
   Users, 
   Clock,
-  Waves,
-  Star
+  Receipt,
+  Save,
+  X,
+  Waves
 } from 'lucide-react-native';
 
 type MenuItem = Database['public']['Tables']['menu_items']['Row'];
-type Order = Database['public']['Tables']['orders']['Row'];
 
 const { width, height } = Dimensions.get('window');
 
-type CartItem = ValidatedCartItem;
+interface CartItem {
+  menuItem: MenuItem;
+  quantity: number;
+  specialInstructions?: string;
+}
 
 export default function Bar() {
   const { user } = useAuthContext();
@@ -53,22 +52,15 @@ export default function Bar() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [tableNumber, setTableNumber] = useState('');
+  const [currentGuest, setCurrentGuest] = useState(1);
+  const [totalGuests] = useState(3);
+  const [serverName] = useState('WALDO T');
   const [hotelSettings, setHotelSettings] = useState<any>(null);
 
   useEffect(() => {
     loadData();
     loadSettings();
-    initializeAudio();
   }, []);
-
-  const initializeAudio = async () => {
-    try {
-      await audioManager.initialize();
-    } catch (error) {
-      console.warn('Audio initialization failed (non-critical):', error);
-    }
-  };
 
   const loadSettings = async () => {
     try {
@@ -103,158 +95,83 @@ export default function Bar() {
     }
   };
 
-  const categories = useMemo(() => [
-    {
-      id: 'all',
-      name: 'ALL DRINKS',
-      color: ['#64748b', '#475569'],
-      icon: '🍹',
-      items: menuItems,
-    },
-    {
-      id: 'beer',
-      name: 'BEER BASKET',
-      color: ['#d4a574', '#b8956a'],
-      icon: '🍺',
-      items: menuItems.filter(item => item.category === 'beer'),
-    },
-    {
-      id: 'wine',
-      name: 'WINE',
-      color: ['#8b0000', '#660000'],
-      icon: '🍷',
-      items: menuItems.filter(item => item.category === 'wine'),
-    },
-    {
-      id: 'cocktail_short',
-      name: 'COCKTAIL SHORT',
-      color: ['#dc143c', '#b91c3c'],
-      icon: '🍸',
-      items: menuItems.filter(item => item.category === 'cocktail' && item.name.toLowerCase().includes('shot')),
-    },
-    {
-      id: 'cocktail',
-      name: 'COCKTAIL',
-      color: ['#dc143c', '#b91c3c'],
-      icon: '🍹',
-      items: menuItems.filter(item => item.category === 'cocktail'),
-    },
-    {
-      id: 'drinks',
-      name: 'DRINKS',
-      color: ['#228b22', '#006400'],
-      icon: '🥤',
-      items: menuItems.filter(item => ['beverage', 'coffee', 'tea', 'juice', 'water'].includes(item.category)),
-    },
-    {
-      id: 'spirits',
-      name: 'SPIRITS',
-      color: ['#4169e1', '#1e40af'],
-      icon: '🥃',
-      items: menuItems.filter(item => item.category === 'spirits'),
-    },
-  ], [menuItems]);
-
-  const filteredItems = useMemo(() => {
-    const categoryItems = selectedCategory === 'all' 
-      ? menuItems 
-      : categories.find(cat => cat.id === selectedCategory)?.items || [];
-
-    if (!searchQuery.trim()) {
-      return categoryItems;
-    }
-
-    const query = searchQuery.toLowerCase();
-    return categoryItems.filter(item =>
-      item.name.toLowerCase().includes(query) ||
-      item.description.toLowerCase().includes(query)
-    );
-  }, [menuItems, selectedCategory, searchQuery, categories]);
-
   const addToCart = useCallback((menuItem: MenuItem) => {
     if (isProcessing) return;
     
-    try {
-      playAddToCart();
+    setCart(prevCart => {
+      const existingIndex = prevCart.findIndex(item => item.menuItem.id === menuItem.id);
       
-      setCart(prevCart => {
-        const existingIndex = prevCart.findIndex(item => item.menuItem.id === menuItem.id);
-        
-        if (existingIndex >= 0) {
-          const newCart = [...prevCart];
-          newCart[existingIndex].quantity += 1;
-          return newCart;
-        } else {
-          return [...prevCart, { menuItem, quantity: 1 }];
-        }
-      });
-    } catch (error) {
-      console.error('Error adding to cart:', error);
-    }
+      if (existingIndex >= 0) {
+        const newCart = [...prevCart];
+        newCart[existingIndex].quantity += 1;
+        return newCart;
+      } else {
+        return [...prevCart, { menuItem, quantity: 1 }];
+      }
+    });
   }, [isProcessing]);
 
   const updateQuantity = useCallback((menuItemId: string, newQuantity: number) => {
     if (isProcessing) return;
     
-    try {
-      playButtonClick();
-      
-      if (newQuantity <= 0) {
-        setCart(prevCart => prevCart.filter(item => item.menuItem.id !== menuItemId));
-      } else if (newQuantity <= 99) {
-        setCart(prevCart => 
-          prevCart.map(item => 
-            item.menuItem.id === menuItemId 
-              ? { ...item, quantity: newQuantity }
-              : item
-          )
-        );
-      }
-    } catch (error) {
-      console.error('Error updating quantity:', error);
+    if (newQuantity <= 0) {
+      setCart(prevCart => prevCart.filter(item => item.menuItem.id !== menuItemId));
+    } else if (newQuantity <= 99) {
+      setCart(prevCart => 
+        prevCart.map(item => 
+          item.menuItem.id === menuItemId 
+            ? { ...item, quantity: newQuantity }
+            : item
+        )
+      );
     }
   }, [isProcessing]);
 
   const calculateTotals = useMemo(() => {
     const subtotal = cart.reduce((sum, item) => sum + (item.menuItem.price * item.quantity), 0);
     const taxRate = (hotelSettings?.taxRate || 8.5) / 100;
-    const serviceChargeRate = (hotelSettings?.serviceChargeRate || 0) / 100;
-    
     const tax = subtotal * taxRate;
-    const serviceCharge = subtotal * serviceChargeRate;
-    const total = subtotal + tax + serviceCharge;
+    const total = subtotal + tax;
 
-    return { subtotal, tax, serviceCharge, total };
+    return { subtotal, tax, total };
   }, [cart, hotelSettings]);
 
   const processOrder = async (paymentMethod: string) => {
-    if (isProcessing) return;
+    if (isProcessing || cart.length === 0) return;
     
-    // Validate cart before processing
-    const cartValidation = POSValidator.validateCart(cart);
-    if (!cartValidation.isValid) {
-      Alert.alert('Error', cartValidation.error || 'Invalid cart');
-      return;
-    }
-
     setIsProcessing(true);
 
     try {
-      const newOrder = await posOrderManager.createOrder({
-        cart,
-        tableNumber: tableNumber || 'Bar Service',
-        orderType: 'bar',
-        paymentMethod,
-        paymentStatus: paymentMethod === 'ROOM CHARGE' ? 'pending' : 'paid',
-        hotelSettings,
+      const orderNumber = `B-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
+      const orderItems = cart.map(item => ({
+        menu_item_id: item.menuItem.id,
+        quantity: item.quantity,
+        unit_price: item.menuItem.price,
+        special_instructions: item.specialInstructions || '',
+      }));
+
+      await db.insert('orders', {
+        order_number: orderNumber,
+        table_number: `Guest ${currentGuest}`,
+        order_type: 'bar',
+        items: orderItems,
+        subtotal: calculateTotals.subtotal,
+        tax_amount: calculateTotals.tax,
+        service_charge: 0,
+        total_amount: calculateTotals.total,
+        status: 'confirmed',
+        payment_status: paymentMethod === 'ROOM CHARGE' ? 'pending' : 'paid',
+        payment_method: paymentMethod.toLowerCase().replace(/\s+/g, '_'),
       });
 
-      playOrderComplete();
-      Alert.alert('Success', `Order ${newOrder.order_number} placed successfully!`);
+      Alert.alert('Success', `Order ${orderNumber} placed successfully!`);
       
-      // Clear cart and reset
+      // Clear cart and move to next guest
       setCart([]);
-      setTableNumber('');
+      if (currentGuest < totalGuests) {
+        setCurrentGuest(currentGuest + 1);
+      }
       
     } catch (error) {
       console.error('Error processing order:', error);
@@ -262,6 +179,27 @@ export default function Bar() {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const saveOrder = () => {
+    if (cart.length === 0) {
+      Alert.alert('Info', 'No items to save');
+      return;
+    }
+    Alert.alert('Success', 'Order saved for later');
+  };
+
+  const cancelOrder = () => {
+    if (cart.length === 0) return;
+    
+    Alert.alert(
+      'Cancel Order',
+      'Are you sure you want to cancel this order?',
+      [
+        { text: 'No', style: 'cancel' },
+        { text: 'Yes', onPress: () => setCart([]) }
+      ]
+    );
   };
 
   const onRefresh = useCallback(async () => {
@@ -279,711 +217,502 @@ export default function Bar() {
   }, [hotelSettings]);
 
   return (
-    <POSErrorBoundary posType="bar">
-      <SafeAreaView style={styles.container}>
-        <LinearGradient
-          colors={['#7c3aed', '#8b5cf6']}
-          style={styles.headerGradient}
-        >
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <View style={styles.titleContainer}>
-                <Wine size={28} color="white" />
-                <View>
-                  <Text style={styles.title}>Bar POS</Text>
-                  <Text style={styles.subtitle}>Beverage Service System</Text>
-                </View>
-              </View>
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.appName}>foodiv</Text>
+          <Text style={styles.orderType}>NEW BAR ORDER</Text>
+          <Text style={styles.serverInfo}>SERVER: {serverName}</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.searchButton}>
+            <Search size={20} color="white" />
+            <Text style={styles.searchButtonText}>SEARCH</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.mainContent}>
+        {/* Left Panel - Order Management */}
+        <View style={styles.leftPanel}>
+          {/* Guest Selector */}
+          <View style={styles.guestSelector}>
+            <Text style={styles.guestTitle}>GUEST {currentGuest} OF {totalGuests}</Text>
+            <View style={styles.guestControls}>
+              <TouchableOpacity 
+                style={styles.guestButton}
+                onPress={() => setCurrentGuest(Math.max(1, currentGuest - 1))}
+              >
+                <Text style={styles.guestButtonText}>◀</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.guestButton}
+                onPress={() => setCurrentGuest(Math.min(totalGuests, currentGuest + 1))}
+              >
+                <Text style={styles.guestButtonText}>▶</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </LinearGradient>
 
-        <View style={styles.mainContent}>
-          {/* Left Panel - Menu */}
-          <View style={styles.leftPanel}>
-            {/* Search */}
-            <View style={styles.searchContainer}>
-              <Search size={20} color="#64748b" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search beverages..."
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholderTextColor="#94a3b8"
-              />
-            </View>
-
-            {/* Categories */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.categoriesContainer}
-            >
-              {categories.map((category) => (
-                <TouchableOpacity
-                  key={category.id}
-                  style={[
-                    styles.categoryButton,
-                    selectedCategory === category.id && styles.activeCategoryButton
-                  ]}
-                  onPress={() => {
-                    playButtonClick();
-                    setSelectedCategory(category.id);
-                  }}
-                >
-                  <LinearGradient
-                    colors={selectedCategory === category.id ? category.color : ['#f8fafc', '#f1f5f9']}
-                    style={styles.categoryGradient}
-                  >
-                    <Text style={styles.categoryIcon}>{category.icon}</Text>
-                    <Text style={[
-                      styles.categoryText,
-                      selectedCategory === category.id && styles.activeCategoryText
-                    ]}>
-                      {category.name}
-                    </Text>
-                    <Text style={[
-                      styles.categoryCount,
-                      selectedCategory === category.id && styles.activeCategoryCount
-                    ]}>
-                      ({category.items.length})
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            {/* Menu Items */}
-            <ScrollView
-              style={styles.menuItemsContainer}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            >
-              <View style={styles.menuGrid}>
-                {filteredItems.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={styles.menuItemCard}
-                    onPress={() => addToCart(item)}
-                    disabled={!item.is_available || isProcessing}
-                  >
-                    <LinearGradient
-                      colors={item.is_available ? ['#ffffff', '#f8fafc'] : ['#f1f5f9', '#e2e8f0']}
-                      style={styles.menuItemGradient}
-                    >
-                      <View style={styles.menuItemHeader}>
-                        <Text style={[
-                          styles.menuItemName,
-                          !item.is_available && styles.unavailableText
-                        ]}>
-                          {item.name}
-                        </Text>
-                        <Text style={[
-                          styles.menuItemPrice,
-                          !item.is_available && styles.unavailableText
-                        ]}>
-                          {formatCurrency(item.price)}
-                        </Text>
-                      </View>
-                      
-                      <Text style={[
-                        styles.menuItemDescription,
-                        !item.is_available && styles.unavailableText
-                      ]}>
-                        {item.description}
+          {/* Order Items */}
+          <ScrollView style={styles.orderItemsContainer}>
+            {[1, 2, 3].map((guestNum) => (
+              <View key={guestNum} style={styles.guestSection}>
+                <View style={styles.guestHeader}>
+                  <Text style={styles.guestLabel}>GUEST {guestNum}</Text>
+                </View>
+                
+                {cart.filter((_, index) => (index % 3) === (guestNum - 1)).map((item, index) => (
+                  <View key={`${item.menuItem.id}-${index}`} style={styles.orderItem}>
+                    <View style={styles.orderItemLeft}>
+                      <TouchableOpacity style={styles.playButton}>
+                        <Text style={styles.playButtonText}>▶</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.orderItemNumber}>{index + 1}</Text>
+                    </View>
+                    <View style={styles.orderItemCenter}>
+                      <Text style={styles.orderItemName}>{item.menuItem.name}</Text>
+                      <Text style={styles.orderItemDetails}>
+                        {item.menuItem.description.substring(0, 30)}...
                       </Text>
-
-                      <View style={styles.menuItemFooter}>
-                        <View style={styles.menuItemMeta}>
-                          {item.prep_time_minutes > 0 && (
-                            <View style={styles.metaItem}>
-                              <Clock size={12} color="#64748b" />
-                              <Text style={styles.metaText}>{item.prep_time_minutes}min</Text>
-                            </View>
-                          )}
-                          {item.category === 'wine' && (
-                            <Text style={styles.categoryFlag}>🍷</Text>
-                          )}
-                          {item.category === 'cocktail' && (
-                            <Text style={styles.categoryFlag}>🍹</Text>
-                          )}
-                          {item.category === 'beer' && (
-                            <Text style={styles.categoryFlag}>🍺</Text>
-                          )}
-                        </View>
-                        
-                        {!item.is_available && (
-                          <Text style={styles.unavailableLabel}>Unavailable</Text>
-                        )}
-                      </View>
-                    </LinearGradient>
-                  </TouchableOpacity>
+                    </View>
+                    <Text style={styles.orderItemPrice}>
+                      {formatCurrency(item.menuItem.price * item.quantity)}
+                    </Text>
+                  </View>
                 ))}
               </View>
-            </ScrollView>
+            ))}
+          </ScrollView>
+
+          {/* Order Total */}
+          <View style={styles.orderTotal}>
+            <Text style={styles.totalAmount}>{formatCurrency(calculateTotals.total)}</Text>
+            <Text style={styles.taxAmount}>TAX {formatCurrency(calculateTotals.tax)}</Text>
           </View>
 
-          {/* Right Panel - Cart */}
-          <View style={styles.rightPanel}>
-            <LinearGradient
-              colors={['#ffffff', '#f8fafc']}
-              style={styles.cartContainer}
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={styles.actionButton} onPress={() => Alert.alert('Info', 'No receipt option selected')}>
+              <Receipt size={20} color="#64748b" />
+              <Text style={styles.actionButtonText}>NO RECEIPT</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionButton} onPress={saveOrder}>
+              <Save size={20} color="#64748b" />
+              <Text style={styles.actionButtonText}>SAVE</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.orderButton]}
+              onPress={() => processOrder('CASH')}
+              disabled={cart.length === 0 || isProcessing}
             >
-              {/* Cart Header */}
-              <View style={styles.cartHeader}>
-                <View style={styles.cartTitleContainer}>
-                  <ShoppingCart size={24} color="#7c3aed" />
-                  <Text style={styles.cartTitle}>Current Order</Text>
-                </View>
-                <Text style={styles.cartItemCount}>
-                  {cart.reduce((sum, item) => sum + item.quantity, 0)} items
-                </Text>
-              </View>
+              <Wine size={20} color="white" />
+              <Text style={[styles.actionButtonText, styles.orderButtonText]}>ORDER</Text>
+            </TouchableOpacity>
+          </View>
 
-              {/* Table/Location Number */}
-              <View style={styles.tableNumberContainer}>
-                <Text style={styles.tableNumberLabel}>Table/Room:</Text>
-                <TextInput
-                  style={styles.tableNumberInput}
-                  value={tableNumber}
-                  onChangeText={setTableNumber}
-                  placeholder="Table or room number"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
+          {/* Payment Buttons */}
+          <View style={styles.paymentButtons}>
+            <TouchableOpacity 
+              style={styles.paymentButton}
+              onPress={() => processOrder('CASH')}
+              disabled={cart.length === 0 || isProcessing}
+            >
+              <DollarSign size={20} color="white" />
+              <Text style={styles.paymentButtonText}>CASH</Text>
+            </TouchableOpacity>
 
-              {/* Cart Items */}
-              <ScrollView style={styles.cartItemsContainer}>
-                {cart.length === 0 ? (
-                  <View style={styles.emptyCart}>
-                    <Wine size={48} color="#cbd5e1" />
-                    <Text style={styles.emptyCartText}>No drinks in cart</Text>
-                    <Text style={styles.emptyCartSubtext}>Add beverages from the menu</Text>
-                  </View>
-                ) : (
-                  cart.map((item, index) => (
-                    <View key={`${item.menuItem.id}-${index}`} style={styles.cartItem}>
-                      <View style={styles.cartItemInfo}>
-                        <Text style={styles.cartItemName}>{item.menuItem.name}</Text>
-                        <Text style={styles.cartItemPrice}>
-                          {formatCurrency(item.menuItem.price)} each
-                        </Text>
-                      </View>
-                      
-                      <View style={styles.quantityControls}>
-                        <TouchableOpacity
-                          style={styles.quantityButton}
-                          onPress={() => updateQuantity(item.menuItem.id, item.quantity - 1)}
-                          disabled={isProcessing}
-                        >
-                          <Minus size={16} color="#ef4444" />
-                        </TouchableOpacity>
-                        
-                        <Text style={styles.quantityText}>{item.quantity}</Text>
-                        
-                        <TouchableOpacity
-                          style={styles.quantityButton}
-                          onPress={() => updateQuantity(item.menuItem.id, item.quantity + 1)}
-                          disabled={isProcessing || item.quantity >= 99}
-                        >
-                          <Plus size={16} color="#10b981" />
-                        </TouchableOpacity>
-                      </View>
-                      
-                      <Text style={styles.cartItemTotal}>
-                        {formatCurrency(item.menuItem.price * item.quantity)}
-                      </Text>
-                    </View>
-                  ))
-                )}
-              </ScrollView>
+            <TouchableOpacity 
+              style={styles.paymentButton}
+              onPress={() => processOrder('CREDIT')}
+              disabled={cart.length === 0 || isProcessing}
+            >
+              <CreditCard size={20} color="white" />
+              <Text style={styles.paymentButtonText}>CREDIT</Text>
+            </TouchableOpacity>
 
-              {/* Order Summary */}
-              {cart.length > 0 && (
-                <View style={styles.orderSummary}>
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Subtotal:</Text>
-                    <Text style={styles.summaryValue}>{formatCurrency(calculateTotals.subtotal)}</Text>
-                  </View>
-                  
-                  {calculateTotals.tax > 0 && (
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Tax ({(hotelSettings?.taxRate || 8.5)}%):</Text>
-                      <Text style={styles.summaryValue}>{formatCurrency(calculateTotals.tax)}</Text>
-                    </View>
-                  )}
-                  
-                  {calculateTotals.serviceCharge > 0 && (
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Service ({(hotelSettings?.serviceChargeRate || 0)}%):</Text>
-                      <Text style={styles.summaryValue}>{formatCurrency(calculateTotals.serviceCharge)}</Text>
-                    </View>
-                  )}
-                  
-                  <View style={[styles.summaryRow, styles.totalRow]}>
-                    <Text style={styles.totalLabel}>TOTAL:</Text>
-                    <Text style={styles.totalValue}>{formatCurrency(calculateTotals.total)}</Text>
-                  </View>
-                </View>
-              )}
+            <TouchableOpacity 
+              style={styles.paymentButton}
+              onPress={() => processOrder('SETTLE')}
+              disabled={cart.length === 0 || isProcessing}
+            >
+              <Users size={20} color="white" />
+              <Text style={styles.paymentButtonText}>SETTLE</Text>
+            </TouchableOpacity>
+          </View>
 
-              {/* Payment Buttons */}
-              {cart.length > 0 && (
-                <View style={styles.paymentButtons}>
-                  <TouchableOpacity
-                    style={[styles.paymentButton, styles.cashButton]}
-                    onPress={() => processOrder('CASH')}
-                    disabled={isProcessing}
-                  >
-                    <LinearGradient
-                      colors={isProcessing ? ['#94a3b8', '#64748b'] : ['#10b981', '#059669']}
-                      style={styles.paymentButtonGradient}
-                    >
-                      <DollarSign size={20} color="white" />
-                      <Text style={styles.paymentButtonText}>CASH</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.paymentButton, styles.creditButton]}
-                    onPress={() => processOrder('CREDIT CARD')}
-                    disabled={isProcessing}
-                  >
-                    <LinearGradient
-                      colors={isProcessing ? ['#94a3b8', '#64748b'] : ['#3b82f6', '#2563eb']}
-                      style={styles.paymentButtonGradient}
-                    >
-                      <CreditCard size={20} color="white" />
-                      <Text style={styles.paymentButtonText}>CREDIT</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.paymentButton, styles.roomChargeButton]}
-                    onPress={() => {
-                      if (!tableNumber) {
-                        Alert.alert('Room Required', 'Please enter room number for room charge');
-                        return;
-                      }
-                      processOrder('ROOM CHARGE');
-                    }}
-                    disabled={isProcessing}
-                  >
-                    <LinearGradient
-                      colors={isProcessing ? ['#94a3b8', '#64748b'] : ['#7c3aed', '#6d28d9']}
-                      style={styles.paymentButtonGradient}
-                    >
-                      <Users size={20} color="white" />
-                      <Text style={styles.paymentButtonText}>ROOM</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.paymentButton, styles.poolButton]}
-                    onPress={() => processOrder('POOL SERVICE')}
-                    disabled={isProcessing}
-                  >
-                    <LinearGradient
-                      colors={isProcessing ? ['#94a3b8', '#64748b'] : ['#06b6d4', '#0891b2']}
-                      style={styles.paymentButtonGradient}
-                    >
-                      <Waves size={20} color="white" />
-                      <Text style={styles.paymentButtonText}>POOL</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </LinearGradient>
+          {/* Bottom Actions */}
+          <View style={styles.bottomActions}>
+            <TouchableOpacity style={styles.bottomButton}>
+              <Text style={styles.bottomButtonText}>RECALL</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.bottomButton}>
+              <Text style={styles.bottomButtonText}>LOGOUT</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.bottomButton} onPress={cancelOrder}>
+              <Text style={styles.bottomButtonText}>CANCEL</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </SafeAreaView>
-    </POSErrorBoundary>
+
+        {/* Right Panel - Bar Categories */}
+        <View style={styles.rightPanel}>
+          <View style={styles.menuGrid}>
+            {/* Bar Categories */}
+            <TouchableOpacity 
+              style={[styles.menuCategory, styles.beerBasket]}
+              onPress={() => addToCart({
+                id: 'beer-basket',
+                name: 'BEER SELECTION',
+                price: 6.99,
+                category: 'beer',
+                description: 'Assorted beer selection',
+                is_available: true
+              } as MenuItem)}
+            >
+              <Text style={styles.menuCategoryIcon}>🍺</Text>
+              <Text style={styles.menuCategoryText}>BEER BASKET</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.menuCategory, styles.wine]}
+              onPress={() => addToCart({
+                id: 'house-wine',
+                name: 'HOUSE WINE',
+                price: 12.99,
+                category: 'wine',
+                description: 'Premium house wine selection',
+                is_available: true
+              } as MenuItem)}
+            >
+              <Text style={styles.menuCategoryIcon}>🍷</Text>
+              <Text style={styles.menuCategoryText}>WINE</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.menuCategory, styles.cocktailShort]}
+              onPress={() => addToCart({
+                id: 'cocktail-short',
+                name: 'COCKTAIL SHORT',
+                price: 8.99,
+                category: 'cocktail',
+                description: 'Short cocktail selection',
+                is_available: true
+              } as MenuItem)}
+            >
+              <Text style={styles.menuCategoryIcon}>🍸</Text>
+              <Text style={styles.menuCategoryText}>COCKTAIL SHORT</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.menuCategory, styles.cocktail]}
+              onPress={() => addToCart({
+                id: 'cocktail-full',
+                name: 'COCKTAIL',
+                price: 14.99,
+                category: 'cocktail',
+                description: 'Full cocktail selection',
+                is_available: true
+              } as MenuItem)}
+            >
+              <Text style={styles.menuCategoryIcon}>🍹</Text>
+              <Text style={styles.menuCategoryText}>COCKTAIL</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.menuCategory, styles.drinks]}
+              onPress={() => addToCart({
+                id: 'soft-drinks',
+                name: 'SOFT DRINKS',
+                price: 3.99,
+                category: 'beverage',
+                description: 'Non-alcoholic beverages',
+                is_available: true
+              } as MenuItem)}
+            >
+              <Text style={styles.menuCategoryIcon}>🥤</Text>
+              <Text style={styles.menuCategoryText}>DRINKS</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.menuCategory, styles.desserts]}
+              onPress={() => addToCart({
+                id: 'bar-desserts',
+                name: 'DESSERTS',
+                price: 7.99,
+                category: 'dessert',
+                description: 'Sweet treats and desserts',
+                is_available: true
+              } as MenuItem)}
+            >
+              <Text style={styles.menuCategoryIcon}>🍰</Text>
+              <Text style={styles.menuCategoryText}>DESSERTS</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.menuCategory, styles.clubs]}
+              onPress={() => addToCart({
+                id: 'club-special',
+                name: 'CLUB SPECIAL',
+                price: 18.99,
+                category: 'cocktail',
+                description: 'Premium club cocktails',
+                is_available: true
+              } as MenuItem)}
+            >
+              <Text style={styles.menuCategoryIcon}>🏆</Text>
+              <Text style={styles.menuCategoryText}>CLUBS</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.menuCategory, styles.sandwiches]}
+              onPress={() => addToCart({
+                id: 'bar-sandwich',
+                name: 'BAR SANDWICH',
+                price: 11.99,
+                category: 'appetizer',
+                description: 'Bar style sandwiches',
+                is_available: true
+              } as MenuItem)}
+            >
+              <Text style={styles.menuCategoryIcon}>🥪</Text>
+              <Text style={styles.menuCategoryText}>SANDWICHES</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
-  },
-  headerGradient: {
-    paddingTop: 20,
-    paddingBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: '#2c3e50',
   },
   header: {
-    paddingHorizontal: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#34495e',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
   },
   headerLeft: {
     flex: 1,
   },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  title: {
-    fontSize: 28,
+  appName: {
+    fontSize: 24,
     fontFamily: 'Inter-Bold',
     color: 'white',
   },
-  subtitle: {
-    fontSize: 16,
+  orderType: {
+    fontSize: 14,
     fontFamily: 'Inter-Regular',
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 4,
+    color: '#bdc3c7',
+    marginTop: 2,
+  },
+  serverInfo: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#95a5a6',
+    marginTop: 2,
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+  },
+  searchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3498db',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    gap: 6,
+  },
+  searchButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
   },
   mainContent: {
     flex: 1,
     flexDirection: 'row',
   },
   leftPanel: {
-    flex: 2,
-    backgroundColor: '#ffffff',
-    borderRightWidth: 1,
-    borderRightColor: '#e2e8f0',
+    width: 350,
+    backgroundColor: '#ecf0f1',
+    borderRightWidth: 2,
+    borderRightColor: '#bdc3c7',
   },
   rightPanel: {
     flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    margin: 20,
-    backgroundColor: '#f8fafc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#1e293b',
-  },
-  categoriesContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  categoryButton: {
-    marginRight: 12,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  activeCategoryButton: {
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  categoryGradient: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    minWidth: 120,
-  },
-  categoryIcon: {
-    fontSize: 20,
-    marginBottom: 4,
-  },
-  categoryText: {
-    fontSize: 12,
-    fontFamily: 'Inter-SemiBold',
-    color: '#64748b',
-    textAlign: 'center',
-  },
-  activeCategoryText: {
-    color: 'white',
-  },
-  categoryCount: {
-    fontSize: 10,
-    fontFamily: 'Inter-Regular',
-    color: '#94a3b8',
-    marginTop: 2,
-  },
-  activeCategoryCount: {
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  menuItemsContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  menuGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    paddingBottom: 20,
-  },
-  menuItemCard: {
-    width: (width * 0.6 - 60) / 3,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  menuItemGradient: {
-    borderRadius: 12,
-    padding: 16,
-    height: 140,
-  },
-  menuItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  menuItemName: {
-    fontSize: 14,
-    fontFamily: 'Inter-Bold',
-    color: '#1e293b',
-    flex: 1,
-    marginRight: 8,
-  },
-  menuItemPrice: {
-    fontSize: 14,
-    fontFamily: 'Inter-Bold',
-    color: '#7c3aed',
-  },
-  menuItemDescription: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#64748b',
-    lineHeight: 16,
-    flex: 1,
-  },
-  menuItemFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginTop: 8,
-  },
-  menuItemMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  metaText: {
-    fontSize: 10,
-    fontFamily: 'Inter-Regular',
-    color: '#64748b',
-  },
-  categoryFlag: {
-    fontSize: 12,
-  },
-  unavailableText: {
-    color: '#94a3b8',
-  },
-  unavailableLabel: {
-    fontSize: 10,
-    fontFamily: 'Inter-SemiBold',
-    color: '#ef4444',
-  },
-  cartContainer: {
-    flex: 1,
-    margin: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  cartHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    backgroundColor: '#2c3e50',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
   },
-  cartTitleContainer: {
+  guestSelector: {
+    backgroundColor: '#3498db',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  guestTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+  },
+  guestControls: {
+    flexDirection: 'row',
     gap: 8,
   },
-  cartTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#1e293b',
+  guestButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
   },
-  cartItemCount: {
+  guestButtonText: {
+    color: 'white',
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#64748b',
+    fontFamily: 'Inter-Bold',
   },
-  tableNumberContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 12,
+  orderItemsContainer: {
+    flex: 1,
+    backgroundColor: 'white',
   },
-  tableNumberLabel: {
+  guestSection: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#ecf0f1',
+  },
+  guestHeader: {
+    backgroundColor: '#34495e',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  guestLabel: {
+    color: 'white',
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',
-    color: '#374151',
   },
-  tableNumberInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    backgroundColor: '#fafafa',
+  orderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ecf0f1',
   },
-  cartItemsContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
+  orderItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: 60,
   },
-  emptyCart: {
-    flex: 1,
+  playButton: {
+    backgroundColor: '#27ae60',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
   },
-  emptyCartText: {
+  playButtonText: {
+    color: 'white',
+    fontSize: 10,
+    fontFamily: 'Inter-Bold',
+  },
+  orderItemNumber: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    color: '#2c3e50',
+  },
+  orderItemCenter: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  orderItemName: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    color: '#2c3e50',
+  },
+  orderItemDetails: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#7f8c8d',
+    marginTop: 2,
+  },
+  orderItemPrice: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    color: '#2c3e50',
+  },
+  orderTotal: {
+    backgroundColor: 'white',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    borderTopWidth: 2,
+    borderTopColor: '#bdc3c7',
+  },
+  totalAmount: {
+    fontSize: 32,
+    fontFamily: 'Inter-Bold',
+    color: '#2c3e50',
+  },
+  taxAmount: {
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
-    color: '#64748b',
-    marginTop: 12,
-  },
-  emptyCartSubtext: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#94a3b8',
+    color: '#7f8c8d',
     marginTop: 4,
   },
-  cartItem: {
+  actionButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: '#ecf0f1',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-    gap: 12,
+    paddingHorizontal: 8,
+    gap: 8,
   },
-  cartItemInfo: {
+  actionButton: {
     flex: 1,
-  },
-  cartItemName: {
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#1e293b',
-  },
-  cartItemPrice: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#64748b',
-    marginTop: 2,
-  },
-  quantityControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-  },
-  quantityButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f1f5f9',
     justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    backgroundColor: '#bdc3c7',
+    paddingVertical: 12,
+    borderRadius: 6,
+    gap: 6,
   },
-  quantityText: {
-    fontSize: 16,
-    fontFamily: 'Inter-Bold',
-    color: '#1e293b',
-    minWidth: 24,
-    textAlign: 'center',
+  orderButton: {
+    backgroundColor: '#27ae60',
   },
-  cartItemTotal: {
-    fontSize: 14,
-    fontFamily: 'Inter-Bold',
-    color: '#7c3aed',
-    minWidth: 60,
-    textAlign: 'right',
-  },
-  orderSummary: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#64748b',
-  },
-  summaryValue: {
-    fontSize: 14,
+  actionButtonText: {
+    fontSize: 12,
     fontFamily: 'Inter-SemiBold',
-    color: '#1e293b',
+    color: '#2c3e50',
   },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#d1d5db',
-    paddingTop: 8,
-    marginTop: 8,
-    marginBottom: 0,
-  },
-  totalLabel: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#1e293b',
-  },
-  totalValue: {
-    fontSize: 20,
-    fontFamily: 'Inter-Bold',
-    color: '#7c3aed',
+  orderButtonText: {
+    color: 'white',
   },
   paymentButtons: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 20,
-    gap: 12,
+    backgroundColor: '#2c3e50',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    gap: 8,
   },
   paymentButton: {
     flex: 1,
-    minWidth: 100,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  paymentButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 8,
+    backgroundColor: '#34495e',
+    paddingVertical: 16,
+    borderRadius: 6,
     gap: 6,
   },
   paymentButtonText: {
@@ -991,8 +720,59 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Bold',
     color: 'white',
   },
-  cashButton: {},
-  creditButton: {},
-  roomChargeButton: {},
-  poolButton: {},
+  bottomActions: {
+    flexDirection: 'row',
+    backgroundColor: '#34495e',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  bottomButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  bottomButtonText: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: '#bdc3c7',
+  },
+  menuGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  menuCategory: {
+    width: (width - 350 - 60) / 3,
+    height: 120,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  menuCategoryIcon: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  menuCategoryText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    color: 'white',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  beerBasket: { backgroundColor: '#D2691E' },
+  wine: { backgroundColor: '#8B0000' },
+  cocktailShort: { backgroundColor: '#DC143C' },
+  cocktail: { backgroundColor: '#B22222' },
+  drinks: { backgroundColor: '#228B22' },
+  desserts: { backgroundColor: '#4169E1' },
+  clubs: { backgroundColor: '#191970' },
+  sandwiches: { backgroundColor: '#8A2BE2' },
 });
