@@ -1,6 +1,6 @@
 import React, { Component, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { TriangleAlert as AlertTriangle, RefreshCw, Home } from 'lucide-react-native';
+import { TriangleAlert as AlertTriangle, RefreshCw, Chrome as Home } from 'lucide-react-native';
 import { posErrorHandler } from '@/lib/pos-error-handler';
 
 interface Props {
