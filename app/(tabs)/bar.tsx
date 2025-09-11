@@ -572,6 +572,7 @@ export default function Bar() {
                       </TouchableOpacity>
                     </View>
                   </View>
+                  </View>
                 </View>
               ))}
             </View>
