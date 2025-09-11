@@ -670,59 +670,66 @@ export default function Restaurant() {
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
               <View style={styles.topButtons}>
-                <View 
+                <TouchableOpacity 
                   style={[styles.actionButton, { backgroundColor: '#95a5a6' }]}
-                  onTouchStart={handleNoReceipt}
+                  onPress={handleNoReceipt}
+                  activeOpacity={0.7}
                 >
                   <Receipt size={16} color="#fff" />
                   <Text style={styles.actionButtonText}>NO RECEIPT</Text>
-                </View>
+                </TouchableOpacity>
 
-                <View 
+                <TouchableOpacity 
                   style={[styles.actionButton, { backgroundColor: '#3498db' }]}
-                  onTouchStart={handleSaveOrder}
+                  onPress={handleSaveOrder}
+                  activeOpacity={0.7}
                 >
                   <Clock size={16} color="#fff" />
                   <Text style={styles.actionButtonText}>SAVE</Text>
-                </View>
+                </TouchableOpacity>
 
-                <View 
+                <TouchableOpacity 
                   style={[
                     styles.actionButton, 
                     { backgroundColor: cart.length > 0 ? '#27ae60' : '#95a5a6' }
                   ]}
-                  onTouchStart={cart.length > 0 ? placeOrder : undefined}
+                  onPress={cart.length > 0 ? placeOrder : undefined}
+                  disabled={cart.length === 0}
+                  activeOpacity={0.7}
                 >
                   <Text style={styles.actionButtonText}>
                     {orderPlaced ? 'ORDER PLACED' : 'ORDER'}
                   </Text>
-                </View>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.bottomButtons}>
-                <View 
+                <TouchableOpacity 
                   style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
-                  onTouchStart={handleCashPayment}
+                  onPress={handleCashPayment}
+                  activeOpacity={0.7}
                 >
                   <DollarSign size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>CASH</Text>
-                </View>
+                </TouchableOpacity>
 
-                <View 
+                <TouchableOpacity 
                   style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
-                  onTouchStart={handleCreditPayment}
+                  onPress={handleCreditPayment}
+                  activeOpacity={0.7}
                 >
                   <CreditCard size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>CREDIT</Text>
-                </View>
+                </TouchableOpacity>
 
-                <View 
+                <TouchableOpacity 
                   style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
-                  onTouchStart={handleSettle}
+                  onPress={handleSettle}
+                  activeOpacity={0.7}
                 >
                   <Settings size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>SETTLE</Text>
-                </View>
+                </TouchableOpacity>
               </View>
             </View>
           </LinearGradient>
