@@ -18,21 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { db } from '@/lib/database';
 import { saveHotelSettings, loadHotelSettings } from '@/lib/storage';
 import { Database } from '@/types/database';
-import { 
-  Wine, 
-  Search, 
-  User, 
-  Trash2, 
-  CreditCard, 
-  DollarSign,
-  Clock,
-  Receipt,
-  Settings,
-  Martini,
-  AlertTriangle,
-  CheckCircle,
-  Loader
-} from 'lucide-react-native';
+import { Wine, Search, User, Trash2, CreditCard, DollarSign, Clock, Receipt, Settings, Martini, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, Loader } from 'lucide-react-native';
 import { audioManager } from '@/lib/audio';
 import { currencyManager } from '@/lib/currency';
 import { receiptPrinter } from '@/lib/printer';
