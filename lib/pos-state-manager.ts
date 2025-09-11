@@ -181,7 +181,7 @@ export class POSStateManager {
     if (this.autoSaveInterval) {
       clearInterval(this.autoSaveInterval);
     }
-    this.listeners = [];
+    this.listeners.length = 0;
   }
 }
 

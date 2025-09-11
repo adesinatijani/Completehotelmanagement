@@ -12,7 +12,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import * as DocumentPicker from 'expo-document-picker';
 import * as XLSX from 'xlsx';
-import { ExcelTemplateDownloader } from '@/components/ExcelTemplateDownloader';
 import { db } from '@/lib/database';
 import { Database } from '@/types/database';
 import { Upload, FileSpreadsheet, Download, CircleCheck as CheckCircle, CircleAlert as AlertCircle, FileText } from 'lucide-react-native';
@@ -350,12 +349,9 @@ export function ExcelImporter({ visible, onClose, importType, onImportComplete }
                     Download the Excel template with the correct column format and sample data.
                   </Text>
                   
-                  <ExcelTemplateDownloader
-                    templateType={importType}
-                    onDownloadComplete={() => {
-                      console.log('Template downloaded successfully');
-                    }}
-                  />
+                  <TouchableOpacity style={styles.downloadButton} onPress={downloadTemplate}>
+                    <Text style={styles.downloadButtonText}>Download Template</Text>
+                  </TouchableOpacity>
                 </View>
 
                 {/* Instructions Section */}
@@ -648,7 +644,14 @@ const styles = StyleSheet.create({
   downloadButtonText: {
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',
-    color: '#1e3a8a',
+    color: 'white',
+  },
+  downloadButton: {
+    backgroundColor: '#1e3a8a',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
   },
   instructionsList: {
     gap: 12,

@@ -21,6 +21,7 @@ import { loadHotelSettings } from '@/lib/storage';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
+import { Platform } from 'react-native';
 
 type Booking = Database['public']['Tables']['bookings']['Row'];
 type Order = Database['public']['Tables']['orders']['Row'];

@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { ExcelTemplateDownloader } from '@/components/ExcelTemplateDownloader';
-import { saveHotelSettings } from '@/lib/storage';
+import { saveHotelSettings, loadHotelSettings } from '@/lib/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Settings as SettingsIcon, User, Bell, Shield, Database, Wifi, Moon, Globe, CircleHelp as HelpCircle, LogOut, Save, Star, Sparkles } from 'lucide-react-native';
 import { SUPPORTED_CURRENCIES, currencyManager } from '@/lib/currency';
@@ -66,6 +66,8 @@ export default function Settings() {
   });
 
   React.useEffect(() => {
+    loadInitialSettings();
+    
     // Entrance animations
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -80,6 +82,17 @@ export default function Settings() {
       }),
     ]).start();
   }, []);
+
+  const loadInitialSettings = async () => {
+    try {
+      const settings = await loadHotelSettings();
+      if (settings) {
+        setHotelSettings(settings);
+      }
+    } catch (error) {
+      console.error('Error loading initial settings:', error);
+    }
+  };
 
   const handleSaveSettings = async () => {
     try {

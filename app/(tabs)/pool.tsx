@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '@/lib/database';
 import { Database } from '@/types/database';
-import { ExcelTemplateDownloader } from '@/components/ExcelTemplateDownloader';
 import { Waves, Thermometer, Users, Clock, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 
 type Order = Database['public']['Tables']['orders']['Row'];
@@ -36,14 +35,10 @@ export default function Pool() {
 
   const loadPoolOrders = async () => {
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('order_type', 'pool_bar')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setOrders(data || []);
+      const ordersData = await db.select<Order>('orders', {
+        filters: { order_type: 'pool_bar' }
+      });
+      setOrders(ordersData);
     } catch (error) {
       console.error('Error loading pool orders:', error);
       Alert.alert('Error', 'Failed to load pool orders');
@@ -54,12 +49,7 @@ export default function Pool() {
 
   const updateOrderStatus = async (orderId: string, status: Order['status']) => {
     try {
-      const { error } = await supabase
-        .from('orders')
-        .update({ status })
-        .eq('id', orderId);
-
-      if (error) throw error;
+      await db.update<Order>('orders', orderId, { status });
 
       setOrders(orders.map(order => 
         order.id === orderId ? { ...order, status } : order
