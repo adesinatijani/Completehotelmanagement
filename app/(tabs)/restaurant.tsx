@@ -80,6 +80,7 @@ export default function Restaurant() {
   const [hotelSettings, setHotelSettings] = useState<any>(null);
   const [receiptOption, setReceiptOption] = useState<'no_receipt' | 'print' | 'email'>('no_receipt');
   const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
+  const [pendingOrder, setPendingOrder] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -181,18 +182,18 @@ export default function Restaurant() {
     }
   }, [hotelSettings]);
 
-  const processOrder = useCallback(async (paymentMethod: string) => {
-    console.log('🔄 Processing order with payment method:', paymentMethod);
+  const createOrder = useCallback(async () => {
+    console.log('🔄 Creating order (not yet sending to kitchen)');
     console.log('🛒 Current cart items:', cart.length);
     
     if (isProcessing) {
-      console.log('⏳ Already processing, ignoring request');
+      console.log('⏳ Already processing order, ignoring request');
       return;
     }
     
     if (cart.length === 0) {
-      console.log('❌ Cart is empty, cannot process order');
-      Alert.alert('Order Error', 'Please add items to cart before placing order');
+      console.log('❌ Cart is empty, cannot create order');
+      Alert.alert('Order Error', 'Please add items to cart before creating order');
       return;
     }
 
@@ -202,7 +203,7 @@ export default function Restaurant() {
       // Calculate order totals
       const totals = calculateTotals;
       
-      console.log('💰 Order totals:', totals);
+      console.log('💰 Order totals calculated:', totals);
       
       // Create order items
       const orderItems = cart.map(item => ({
@@ -215,9 +216,9 @@ export default function Restaurant() {
       // Generate order number
       const orderNumber = `R-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       
-      console.log('📋 Creating order:', orderNumber, 'with', orderItems.length, 'items');
+      console.log('📋 Creating pending order:', orderNumber, 'with', orderItems.length, 'items');
       
-      // Create order in database
+      // Create pending order (not sent to kitchen yet)
       const orderData = {
         order_number: orderNumber,
         table_number: `Guest ${currentGuest}`,
@@ -227,43 +228,93 @@ export default function Restaurant() {
         tax_amount: totals.tax,
         service_charge: 0,
         total_amount: totals.total,
-        status: 'confirmed' as const,
+        status: 'pending' as const, // Order created but not sent to kitchen
+        payment_status: 'pending' as const,
+        payment_method: null,
+      };
+      
+      // Store as pending order (don't save to database yet)
+      setPendingOrder(orderData);
+      
+      console.log('✅ Pending order created:', orderData);
+
+
+      Alert.alert(
+        'Order Created!', 
+        `Order Number: ${orderNumber}\nItems: ${cart.length}\nTotal: ${formatCurrency(totals.total)}\n\nNow select payment method to send to kitchen.`,
+        [{ text: 'OK' }]
+      );
+      
+      // Don't clear cart yet - wait for payment
+    } catch (error) {
+      console.error('Error creating order:', error);
+      Alert.alert('Error', `Failed to create order: ${error.message || error}. Please try again.`);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [isProcessing, cart, calculateTotals, currentGuest, formatCurrency]);
+
+  const processPayment = useCallback(async (paymentMethod: string) => {
+    console.log('💳 Processing payment with method:', paymentMethod);
+    
+    if (!pendingOrder) {
+      Alert.alert('Error', 'No pending order. Please create an order first.');
+      return;
+    }
+
+    if (isProcessing) {
+      console.log('⏳ Already processing payment, ignoring request');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      // Update order with payment information
+      const finalOrderData = {
+        ...pendingOrder,
+        status: 'confirmed' as const, // Now send to kitchen
         payment_status: paymentMethod === 'SETTLE' ? 'pending' as const : 'paid' as const,
         payment_method: paymentMethod.toLowerCase(),
       };
       
-      const order = await db.insert('orders', orderData);
+      console.log('💾 Saving order to database with payment:', finalOrderData);
       
-      console.log('✅ Order created successfully:', order);
+      // Save order to database (now it goes to kitchen)
+      const order = await db.insert('orders', finalOrderData);
+      
+      console.log('✅ Order saved and sent to kitchen:', order);
 
       // Handle receipt option
       if (receiptOption === 'print') {
-        Alert.alert('Receipt', `Receipt for order ${orderNumber} would be printed`);
+        Alert.alert('Receipt', `Receipt for order ${pendingOrder.order_number} would be printed`);
       } else if (receiptOption === 'email') {
-        Alert.alert('Receipt', `Receipt for order ${orderNumber} would be emailed to guest`);
+        Alert.alert('Receipt', `Receipt for order ${pendingOrder.order_number} would be emailed to guest`);
       }
 
       Alert.alert(
-        'Order Placed Successfully!', 
-        `Order Number: ${orderNumber}\nItems: ${cart.length}\nTotal: ${formatCurrency(totals.total)}\nPayment: ${paymentMethod}\n\nOrder sent to kitchen!`,
+        'Payment Processed & Order Sent!', 
+        `Order Number: ${pendingOrder.order_number}\nItems: ${cart.length}\nTotal: ${formatCurrency(pendingOrder.total_amount)}\nPayment: ${paymentMethod}\n\n✅ Order sent to kitchen!`,
         [{ text: 'OK' }]
       );
       
-      // Clear cart and move to next guest
+      // Clear everything after successful payment
       setCart([]);
-      console.log('🧹 Cart cleared after successful order');
+      setPendingOrder(null);
+      console.log('🧹 Cart and pending order cleared after successful payment');
+      
       if (currentGuest < totalGuests) {
         setCurrentGuest(currentGuest + 1);
         console.log('👤 Moved to next guest:', currentGuest + 1);
       }
       
     } catch (error) {
-      console.error('Error processing order:', error);
-      Alert.alert('Error', `Failed to process order: ${error.message || error}. Please try again.`);
+      console.error('Error processing payment:', error);
+      Alert.alert('Error', `Failed to process payment: ${error.message || error}. Please try again.`);
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, cart, calculateTotals, receiptOption, currentGuest, totalGuests, formatCurrency]);
+  }, [isProcessing, pendingOrder, cart, receiptOption, formatCurrency, currentGuest, totalGuests]);
 
   const saveOrder = useCallback(() => {
     console.log('💾 Saving order for Guest', currentGuest);
@@ -341,11 +392,11 @@ export default function Restaurant() {
   const cancelOrder = useCallback(() => {
     console.log('❌ Cancelling order');
     
-    if (cart.length === 0) return;
+    if (cart.length === 0 && !pendingOrder) return;
     
     Alert.alert(
       'Cancel Order',
-      `Cancel current order?\n\nThis will remove all ${cart.length} items from your cart.\nTotal value: ${formatCurrency(calculateTotals.total)}\n\nThis action cannot be undone.`,
+      `Cancel current order?\n\n${pendingOrder ? 'This will cancel the pending order and ' : ''}remove all ${cart.length} items from your cart.\nTotal value: ${formatCurrency(calculateTotals.total)}\n\nThis action cannot be undone.`,
       [
         { text: 'Keep Order', style: 'cancel' },
         { 
@@ -353,12 +404,13 @@ export default function Restaurant() {
           style: 'destructive',
           onPress: () => {
             setCart([]);
+            setPendingOrder(null);
             Alert.alert('Order Cancelled', 'All items have been removed from the cart');
           }
         }
       ]
     );
-  }, [cart, calculateTotals, formatCurrency]);
+  }, [cart, pendingOrder, calculateTotals, formatCurrency]);
 
 
   return (
@@ -477,12 +529,12 @@ export default function Restaurant() {
 
             <TouchableOpacity 
               style={[styles.actionButton, styles.orderButton]}
-              onPress={() => processOrder('CASH')}
-              disabled={cart.length === 0 || isProcessing}
+              onPress={createOrder}
+              disabled={cart.length === 0 || isProcessing || pendingOrder !== null}
             >
               <ChefHat size={20} color="white" />
               <Text style={[styles.actionButtonText, styles.orderButtonText]}>
-                {isProcessing ? 'PROCESSING...' : 'ORDER'}
+                {isProcessing ? 'CREATING...' : pendingOrder ? 'ORDER CREATED' : 'ORDER'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -491,8 +543,8 @@ export default function Restaurant() {
           <View style={styles.paymentButtons}>
             <TouchableOpacity 
               style={styles.paymentButton}
-              onPress={() => processOrder('CASH')}
-              disabled={cart.length === 0 || isProcessing}
+              onPress={() => processPayment('CASH')}
+              disabled={!pendingOrder || isProcessing}
             >
               <DollarSign size={20} color="white" />
               <Text style={styles.paymentButtonText}>CASH</Text>
@@ -500,8 +552,8 @@ export default function Restaurant() {
 
             <TouchableOpacity 
               style={styles.paymentButton}
-              onPress={() => processOrder('CREDIT')}
-              disabled={cart.length === 0 || isProcessing}
+              onPress={() => processPayment('CREDIT')}
+              disabled={!pendingOrder || isProcessing}
             >
               <CreditCard size={20} color="white" />
               <Text style={styles.paymentButtonText}>CREDIT</Text>
@@ -509,8 +561,8 @@ export default function Restaurant() {
 
             <TouchableOpacity 
               style={styles.paymentButton}
-              onPress={() => processOrder('SETTLE')}
-              disabled={cart.length === 0 || isProcessing}
+              onPress={() => processPayment('SETTLE')}
+              disabled={!pendingOrder || isProcessing}
             >
               <Users size={20} color="white" />
               <Text style={styles.paymentButtonText}>SETTLE</Text>
