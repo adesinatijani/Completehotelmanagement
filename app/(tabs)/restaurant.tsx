@@ -225,13 +225,7 @@ export default function Restaurant() {
   };
 
   const completePayment = async (paymentMethod: string) => {
-    if (cart.length === 0) {
-      Alert.alert('Error', 'Cart is empty');
-      return;
-    }
-
     try {
-      // Place order first if not already placed
       const { subtotal, tax, total } = calculateTotal();
       const serviceCharge = subtotal * ((hotelSettings?.serviceChargeRate || 0) / 100);
       const finalTotal = subtotal + tax + serviceCharge;
@@ -246,7 +240,7 @@ export default function Restaurant() {
       const orderNumber = `R-${Date.now()}`;
       await db.insert<Order>('orders', {
         order_number: orderNumber,
-        table_number: tableNumber || 'Bar Service',
+        table_number: tableNumber || 'Restaurant',
         order_type: 'restaurant',
         items: orderItems,
         subtotal,
@@ -259,7 +253,7 @@ export default function Restaurant() {
 
       playOrderComplete();
       
-      Alert.alert('Payment Complete', `${paymentMethod} payment processed successfully`);
+      Alert.alert('Success', `Order completed with ${paymentMethod} payment`);
       
       // Clear cart and reset state
       setCart([]);
@@ -272,53 +266,50 @@ export default function Restaurant() {
   };
 
   const handleNoReceipt = () => {
-    if (cart.length === 0) {
-      Alert.alert('Error', 'Cart is empty');
-      return;
-    }
-
-    completePayment('No Receipt');
+    Alert.alert(
+      'Complete Order',
+      'Process order without printing receipt?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Complete', onPress: () => completePayment('No Receipt') }
+      ]
+    );
   };
 
-  const handleSaveOrder = async () => {
-    if (cart.length === 0) {
-      Alert.alert('Error', 'Cart is empty');
-      return;
-    }
-
-    try {
-      playButtonClick();
-      await placeOrder();
-      Alert.alert('Success', 'Order saved and sent to kitchen!');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to save order');
-    }
+  const handlePlaceOrder = async () => {
+    Alert.alert(
+      'Send to Kitchen',
+      'Send this order to the kitchen for preparation?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Send Order', onPress: () => placeOrder() }
+      ]
+    );
   };
 
   const handleCashPayment = () => {
-    if (cart.length === 0) {
-      Alert.alert('Error', 'Cart is empty');
-      return;
-    }
-
-    completePayment('Cash');
+    Alert.alert(
+      'Cash Payment',
+      `Process cash payment of ${formatCurrency(total)}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Process', onPress: () => completePayment('Cash') }
+      ]
+    );
   };
 
   const handleCreditPayment = () => {
-    if (cart.length === 0) {
-      Alert.alert('Error', 'Cart is empty');
-      return;
-    }
-
-    completePayment('Credit Card');
+    Alert.alert(
+      'Credit Card Payment',
+      `Process credit card payment of ${formatCurrency(total)}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Process', onPress: () => completePayment('Credit Card') }
+      ]
+    );
   };
 
   const handleSettle = () => {
-    if (cart.length === 0) {
-      Alert.alert('Error', 'Cart is empty');
-      return;
-    }
-
     playButtonClick();
     Alert.alert(
       'Settle Order',
@@ -333,27 +324,14 @@ export default function Restaurant() {
   };
 
   const clearCart = () => {
+    playButtonClick();
     if (cart.length === 0) {
       Alert.alert('Info', 'Cart is already empty');
       return;
     }
-
-    playButtonClick();
-    Alert.alert(
-      'Clear Cart',
-      'Remove all items from cart?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Clear', 
-          style: 'destructive',
-          onPress: () => {
-            setCart([]);
-            Alert.alert('Success', 'Cart cleared');
-          }
-        }
-      ]
-    );
+    
+    setCart([]);
+    Alert.alert('Success', 'Cart cleared');
   };
 
   const handleRoomCharge = async () => {
@@ -568,7 +546,8 @@ export default function Restaurant() {
               <View style={styles.topButtons}>
                 <TouchableOpacity 
                   style={[styles.actionButton, { backgroundColor: '#95a5a6' }]}
-                  onPress={handleNoReceipt}
+                  onPress={cart.length > 0 ? handleNoReceipt : undefined}
+                  disabled={cart.length === 0}
                   activeOpacity={0.7}
                 >
                   <Receipt size={16} color="#fff" />
@@ -577,7 +556,8 @@ export default function Restaurant() {
 
                 <TouchableOpacity 
                   style={[styles.actionButton, { backgroundColor: '#f39c12' }]}
-                  onPress={clearCart}
+                  onPress={cart.length > 0 ? clearCart : undefined}
+                  disabled={cart.length === 0}
                   activeOpacity={0.7}
                 >
                   <Trash2 size={16} color="#fff" />
@@ -589,7 +569,7 @@ export default function Restaurant() {
                     styles.actionButton, 
                     { backgroundColor: cart.length > 0 ? '#27ae60' : '#95a5a6' }
                   ]}
-                  onPress={cart.length > 0 ? handleSaveOrder : undefined}
+                  onPress={cart.length > 0 ? handlePlaceOrder : undefined}
                   disabled={cart.length === 0}
                   activeOpacity={0.7}
                 >
@@ -602,7 +582,8 @@ export default function Restaurant() {
               <View style={styles.bottomButtons}>
                 <TouchableOpacity 
                   style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
-                  onPress={handleCashPayment}
+                  onPress={cart.length > 0 ? handleCashPayment : undefined}
+                  disabled={cart.length === 0}
                   activeOpacity={0.7}
                 >
                   <DollarSign size={16} color="#fff" />
@@ -611,7 +592,8 @@ export default function Restaurant() {
 
                 <TouchableOpacity 
                   style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
-                  onPress={handleCreditPayment}
+                  onPress={cart.length > 0 ? handleCreditPayment : undefined}
+                  disabled={cart.length === 0}
                   activeOpacity={0.7}
                 >
                   <CreditCard size={16} color="#fff" />
@@ -620,7 +602,8 @@ export default function Restaurant() {
 
                 <TouchableOpacity 
                   style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
-                  onPress={handleSettle}
+                  onPress={cart.length > 0 ? handleSettle : undefined}
+                  disabled={cart.length === 0}
                   activeOpacity={0.7}
                 >
                   <Settings size={16} color="#fff" />
