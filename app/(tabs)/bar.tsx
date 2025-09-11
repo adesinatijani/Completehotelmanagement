@@ -552,4 +552,27 @@ export default function Bar() {
                     <Text style={styles.orderItemNumber}>{index + 1}</Text>
                   </View>
                   <View style={styles.orderItemCenter}>
-                    <Text style={
+                    <Text style={styles.orderItemName}>{item.menuItem.name}</Text>
+                    <Text style={styles.orderItemPrice}>{formatCurrency(item.menuItem.price)}</Text>
+                  </View>
+                  <View style={styles.orderItemRight}>
+                    <View style={styles.quantityControls}>
+                      <TouchableOpacity 
+                        style={styles.quantityButton}
+                        onPress={() => updateQuantity(item.menuItem.id, item.quantity - 1)}
+                      >
+                        <Text style={styles.quantityButtonText}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.quantityText}>{item.quantity}</Text>
+                      <TouchableOpacity 
+                        style={styles.quantityButton}
+                        onPress={() => updateQuantity(item.menuItem.id, item.quantity + 1)}
+                      >
+                        <Text style={styles.quantityButtonText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
