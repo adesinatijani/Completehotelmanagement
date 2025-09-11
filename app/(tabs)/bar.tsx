@@ -91,15 +91,20 @@ export default function Bar() {
   const addToCart = useCallback((menuItem: MenuItem) => {
     if (isProcessing) return;
     
+    console.log('🍷 Adding to bar cart:', menuItem.name);
+    
     setCart(prevCart => {
       const existingIndex = prevCart.findIndex(item => item.menuItem.id === menuItem.id);
       
       if (existingIndex >= 0) {
         const newCart = [...prevCart];
         newCart[existingIndex].quantity += 1;
+        console.log('✅ Updated quantity for existing bar item:', newCart[existingIndex]);
         return newCart;
       } else {
-        return [...prevCart, { menuItem, quantity: 1 }];
+        const newItem = { menuItem, quantity: 1 };
+        console.log('✅ Added new bar item to cart:', newItem);
+        return [...prevCart, newItem];
       }
     });
   }, [isProcessing]);
@@ -140,7 +145,10 @@ export default function Bar() {
   const processOrder = useCallback(async (paymentMethod: string) => {
     console.log('🍷 Processing bar order with payment method:', paymentMethod);
     
-    if (isProcessing || cart.length === 0) return;
+    if (isProcessing) {
+      console.log('⏳ Already processing bar order, ignoring request');
+      return;
+    }
     
     if (cart.length === 0) {
       Alert.alert('Order Error', 'Please add drinks to cart before placing order');
@@ -153,6 +161,8 @@ export default function Bar() {
       // Calculate order totals
       const totals = calculateTotals;
       
+      console.log('💰 Bar order totals:', totals);
+      
       // Create order items
       const orderItems = cart.map(item => ({
         menu_item_id: item.menuItem.id,
@@ -163,6 +173,8 @@ export default function Bar() {
 
       // Generate order number
       const orderNumber = `B-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
+      console.log('🍸 Creating bar order:', orderNumber, 'with', orderItems.length, 'items');
       
       // Create order in database
       const orderData = {
@@ -190,7 +202,11 @@ export default function Bar() {
         Alert.alert('Receipt', `Bar receipt for order ${orderNumber} would be emailed to guest`);
       }
 
-      Alert.alert('Success', `Bar Order ${orderNumber} placed successfully!\nTotal: ${formatCurrency(totals.total)}\nPayment: ${paymentMethod}`);
+      Alert.alert(
+        'Bar Order Placed Successfully!', 
+        `Order Number: ${orderNumber}\nDrinks: ${cart.length}\nTotal: ${formatCurrency(totals.total)}\nPayment: ${paymentMethod}\n\nOrder sent to bar!`,
+        [{ text: 'OK' }]
+      );
       
       // Clear cart and move to next guest
       setCart([]);
@@ -215,8 +231,17 @@ export default function Bar() {
     }
     
     setSavedOrders(prev => [...prev, [...cart]]);
-    setCart([]);
-    Alert.alert('Success', `Bar order saved for Guest ${currentGuest}!\nItems: ${cart.length}\nTotal: ${formatCurrency(calculateTotals.total)}\n\nYou can recall it later using the RECALL button.`);
+    Alert.alert(
+      'Bar Order Saved!', 
+      `Guest ${currentGuest} bar order saved successfully!\n\nDrinks saved: ${cart.length}\nTotal value: ${formatCurrency(calculateTotals.total)}\n\nUse RECALL button to restore this order later.`,
+      [
+        { text: 'Keep Working', style: 'cancel' },
+        { 
+          text: 'Clear Cart', 
+          onPress: () => setCart([])
+        }
+      ]
+    );
   }, [cart, currentGuest, calculateTotals, formatCurrency]);
 
   const recallOrder = useCallback(() => {
@@ -229,7 +254,7 @@ export default function Bar() {
     
     Alert.alert(
       'Recall Order',
-      `Recall the last saved bar order?\n\nThis will replace your current cart with ${savedOrders[savedOrders.length - 1].length} saved items.`,
+      `Found ${savedOrders.length} saved bar order${savedOrders.length !== 1 ? 's' : ''}!\n\nRecall the most recent order?\nDrinks: ${savedOrders[savedOrders.length - 1].length}\n\nThis will replace your current cart.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -238,7 +263,7 @@ export default function Bar() {
             const lastSavedOrder = savedOrders[savedOrders.length - 1];
             setCart(lastSavedOrder);
             setSavedOrders(prev => prev.slice(0, -1));
-            Alert.alert('Success', `Bar order recalled successfully!\nItems restored: ${lastSavedOrder.length}`);
+            Alert.alert('Bar Order Recalled!', `Successfully restored bar order!\n\nDrinks restored: ${lastSavedOrder.length}\nYou can now modify or place this order.`);
           }
         }
       ]
@@ -253,10 +278,13 @@ export default function Bar() {
     const nextIndex = (currentIndex + 1) % options.length;
     const newOption = options[nextIndex];
     
-    setReceiptOption(options[nextIndex]);
+    setReceiptOption(newOption);
     
     console.log('✅ Bar receipt option changed to:', newOption);
-    Alert.alert('Receipt Option', `Bar receipt option changed to: ${newOption.replace('_', ' ').toUpperCase()}`);
+    
+    const optionText = newOption === 'no_receipt' ? 'NO RECEIPT' : 
+                     newOption === 'print' ? 'PRINT RECEIPT' : 'EMAIL RECEIPT';
+    Alert.alert('Receipt Option Changed', `Bar receipt option is now: ${optionText}`);
   }, [receiptOption]);
 
   const getReceiptButtonText = () => {
@@ -274,15 +302,15 @@ export default function Bar() {
     
     Alert.alert(
       'Cancel Order',
-      `Are you sure you want to cancel this bar order?\n\nItems in cart: ${cart.length}\nTotal value: ${formatCurrency(calculateTotals.total)}`,
+      `Cancel current bar order?\n\nThis will remove all ${cart.length} drinks from your cart.\nTotal value: ${formatCurrency(calculateTotals.total)}\n\nThis action cannot be undone.`,
       [
-        { text: 'No', style: 'cancel' },
+        { text: 'Keep Order', style: 'cancel' },
         { 
-          text: 'Yes', 
+          text: 'Cancel Order', 
           style: 'destructive',
           onPress: () => {
             setCart([]);
-            Alert.alert('Order Cancelled', 'Bar cart has been cleared');
+            Alert.alert('Bar Order Cancelled', 'All drinks have been removed from the cart');
           }
         }
       ]

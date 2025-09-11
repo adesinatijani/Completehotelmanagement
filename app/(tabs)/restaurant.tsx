@@ -150,15 +150,20 @@ export default function Restaurant() {
   const addToCart = useCallback((menuItem: MenuItem) => {
     if (isProcessing) return;
     
+    console.log('🛒 Adding to cart:', menuItem.name);
+    
     setCart(prevCart => {
       const existingIndex = prevCart.findIndex(item => item.menuItem.id === menuItem.id);
       
       if (existingIndex >= 0) {
         const newCart = [...prevCart];
         newCart[existingIndex].quantity += 1;
+        console.log('✅ Updated quantity for existing item:', newCart[existingIndex]);
         return newCart;
       } else {
-        return [...prevCart, { menuItem, quantity: 1 }];
+        const newItem = { menuItem, quantity: 1 };
+        console.log('✅ Added new item to cart:', newItem);
+        return [...prevCart, newItem];
       }
     });
   }, [isProcessing]);
@@ -199,7 +204,10 @@ export default function Restaurant() {
   const processOrder = useCallback(async (paymentMethod: string) => {
     console.log('🔄 Processing order with payment method:', paymentMethod);
     
-    if (isProcessing || cart.length === 0) return;
+    if (isProcessing) {
+      console.log('⏳ Already processing, ignoring request');
+      return;
+    }
     
     if (cart.length === 0) {
       Alert.alert('Order Error', 'Please add items to cart before placing order');
@@ -212,6 +220,8 @@ export default function Restaurant() {
       // Calculate order totals
       const totals = calculateTotals;
       
+      console.log('💰 Order totals:', totals);
+      
       // Create order items
       const orderItems = cart.map(item => ({
         menu_item_id: item.menuItem.id,
@@ -222,6 +232,8 @@ export default function Restaurant() {
 
       // Generate order number
       const orderNumber = `R-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
+      console.log('📋 Creating order:', orderNumber, 'with', orderItems.length, 'items');
       
       // Create order in database
       const orderData = {
@@ -249,7 +261,11 @@ export default function Restaurant() {
         Alert.alert('Receipt', `Receipt for order ${orderNumber} would be emailed to guest`);
       }
 
-      Alert.alert('Success', `Order ${orderNumber} placed successfully!\nTotal: ${formatCurrency(totals.total)}\nPayment: ${paymentMethod}`);
+      Alert.alert(
+        'Order Placed Successfully!', 
+        `Order Number: ${orderNumber}\nItems: ${cart.length}\nTotal: ${formatCurrency(totals.total)}\nPayment: ${paymentMethod}\n\nOrder sent to kitchen!`,
+        [{ text: 'OK' }]
+      );
       
       // Clear cart and move to next guest
       setCart([]);
@@ -274,8 +290,17 @@ export default function Restaurant() {
     }
     
     setSavedOrders(prev => [...prev, [...cart]]);
-    setCart([]);
-    Alert.alert('Success', `Order saved for Guest ${currentGuest}!\nItems: ${cart.length}\nTotal: ${formatCurrency(calculateTotals.total)}\n\nYou can recall it later using the RECALL button.`);
+    Alert.alert(
+      'Order Saved!', 
+      `Guest ${currentGuest} order saved successfully!\n\nItems saved: ${cart.length}\nTotal value: ${formatCurrency(calculateTotals.total)}\n\nUse RECALL button to restore this order later.`,
+      [
+        { text: 'Keep Working', style: 'cancel' },
+        { 
+          text: 'Clear Cart', 
+          onPress: () => setCart([])
+        }
+      ]
+    );
   }, [cart, currentGuest, calculateTotals, formatCurrency]);
 
   const recallOrder = useCallback(() => {
@@ -288,7 +313,7 @@ export default function Restaurant() {
     
     Alert.alert(
       'Recall Order',
-      `Recall the last saved order?\n\nThis will replace your current cart with ${savedOrders[savedOrders.length - 1].length} saved items.`,
+      `Found ${savedOrders.length} saved order${savedOrders.length !== 1 ? 's' : ''}!\n\nRecall the most recent order?\nItems: ${savedOrders[savedOrders.length - 1].length}\n\nThis will replace your current cart.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -297,7 +322,7 @@ export default function Restaurant() {
             const lastSavedOrder = savedOrders[savedOrders.length - 1];
             setCart(lastSavedOrder);
             setSavedOrders(prev => prev.slice(0, -1));
-            Alert.alert('Success', `Order recalled successfully!\nItems restored: ${lastSavedOrder.length}`);
+            Alert.alert('Order Recalled!', `Successfully restored order!\n\nItems restored: ${lastSavedOrder.length}\nYou can now modify or place this order.`);
           }
         }
       ]
@@ -312,10 +337,13 @@ export default function Restaurant() {
     const nextIndex = (currentIndex + 1) % options.length;
     const newOption = options[nextIndex];
     
-    setReceiptOption(options[nextIndex]);
+    setReceiptOption(newOption);
     
     console.log('✅ Receipt option changed to:', newOption);
-    Alert.alert('Receipt Option', `Receipt option changed to: ${newOption.replace('_', ' ').toUpperCase()}`);
+    
+    const optionText = newOption === 'no_receipt' ? 'NO RECEIPT' : 
+                     newOption === 'print' ? 'PRINT RECEIPT' : 'EMAIL RECEIPT';
+    Alert.alert('Receipt Option Changed', `Receipt option is now: ${optionText}`);
   }, [receiptOption]);
 
   const getReceiptButtonText = () => {
@@ -333,15 +361,15 @@ export default function Restaurant() {
     
     Alert.alert(
       'Cancel Order',
-      `Are you sure you want to cancel this order?\n\nItems in cart: ${cart.length}\nTotal value: ${formatCurrency(calculateTotals.total)}`,
+      `Cancel current order?\n\nThis will remove all ${cart.length} items from your cart.\nTotal value: ${formatCurrency(calculateTotals.total)}\n\nThis action cannot be undone.`,
       [
-        { text: 'No', style: 'cancel' },
+        { text: 'Keep Order', style: 'cancel' },
         { 
-          text: 'Yes', 
+          text: 'Cancel Order', 
           style: 'destructive',
           onPress: () => {
             setCart([]);
-            Alert.alert('Order Cancelled', 'Cart has been cleared');
+            Alert.alert('Order Cancelled', 'All items have been removed from the cart');
           }
         }
       ]
