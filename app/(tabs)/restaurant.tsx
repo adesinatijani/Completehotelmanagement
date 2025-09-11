@@ -40,8 +40,8 @@ interface MenuCategory {
   items: MenuItem[];
   count: number;
 }
-const { width, height } = Dimensions.get('window');
 
+const { width, height } = Dimensions.get('window');
 
 export default function Restaurant() {
   const { user } = useAuthContext();
@@ -57,7 +57,6 @@ export default function Restaurant() {
   const [hotelSettings, setHotelSettings] = useState<any>(null);
   const [receiptOption, setReceiptOption] = useState<'no_receipt' | 'print' | 'email'>('no_receipt');
   const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
-  const [pendingOrder, setPendingOrder] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -69,6 +68,7 @@ export default function Restaurant() {
       generateCategories();
     }
   }, [menuItems]);
+
   const loadSettings = async () => {
     try {
       const settings = await loadHotelSettings();
@@ -251,37 +251,19 @@ export default function Restaurant() {
       
       console.log('📋 Creating pending order:', orderNumber, 'with', orderItems.length, 'items');
       
-      // Create pending order (not sent to kitchen yet)
-      const orderData = {
-        order_number: orderNumber,
-        table_number: `Guest ${currentGuest}`,
-        order_type: 'restaurant' as const,
-        items: orderItems,
-        subtotal: totals.subtotal,
-        tax_amount: totals.tax,
-        service_charge: 0,
-        total_amount: totals.total,
-        status: 'pending' as const, // Order created but not sent to kitchen
-        payment_status: 'pending' as const,
-        payment_method: null,
-      };
-      
-      console.log('✅ Pending order created:', orderData);
-
       Alert.alert(
         'Order Created!', 
         `Order Number: ${orderNumber}\nItems: ${cart.length}\nTotal: ${formatCurrency(totals.total)}\n\nNow select payment method to send to kitchen.`,
         [{ text: 'OK' }]
       );
       
-      // Don't clear cart yet - wait for payment
     } catch (error) {
       console.error('Error creating order:', error);
       Alert.alert('Error', `Failed to create order: ${error.message || error}. Please try again.`);
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, cart, calculateTotals, currentGuest, formatCurrency]);
+  }, [isProcessing, cart, calculateTotals, formatCurrency]);
 
   const processPayment = useCallback(async (paymentMethod: string) => {
     console.log('💳 Processing payment with method:', paymentMethod);
@@ -920,9 +902,6 @@ const styles = StyleSheet.create({
     minWidth: 20,
     textAlign: 'center',
   },
-  priceButton: {
-    padding: 4,
-  },
   orderItemPrice: {
     fontSize: 14,
     fontFamily: 'Inter-Bold',
@@ -1047,9 +1026,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 4,
-  },
-  menuCategoryDisabled: {
-    opacity: 0.5,
   },
   menuCategoryIcon: {
     fontSize: 32,
