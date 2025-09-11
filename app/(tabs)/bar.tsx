@@ -67,7 +67,7 @@ export default function Bar() {
     const interval = setInterval(() => {
       console.log('🔄 Auto-refreshing bar menu data...');
       loadData();
-    }, 3000); // Refresh every 3 seconds to pick up new menu items
+    }, 2000); // Refresh every 2 seconds to pick up new menu items faster
     
     return () => clearInterval(interval);
   }, []);
