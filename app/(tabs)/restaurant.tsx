@@ -9,26 +9,31 @@ import {
   Alert,
   RefreshControl,
   Dimensions,
-  ActivityIndicator,
-  Keyboard,
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuthContext } from '@/contexts/AuthContext';
 import { db } from '@/lib/database';
-import { loadHotelSettings } from '@/lib/storage';
 import { Database } from '@/types/database';
+import { ExcelTemplateDownloader } from '@/components/ExcelTemplateDownloader';
 import { POSErrorBoundary } from '@/components/POSErrorBoundary';
-import { POSValidator, CartItem, POSError, POSErrorType } from '@/lib/pos-validation';
-import { posErrorHandler } from '@/lib/pos-error-handler';
-import { posOrderManager } from '@/lib/pos-order-manager';
-import { posStateManager } from '@/lib/pos-state-manager';
-import { useOptimizedMenuItems, useOptimizedCategories, useOptimizedSearch } from '@/lib/pos-performance';
-import { posAccessibilityManager, useScreenReaderAnnouncement } from '@/lib/pos-accessibility';
-import { ChefHat, Search, User, Trash2, CreditCard, DollarSign, Clock, Receipt, Settings, Users, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, Loader } from 'lucide-react-native';
-import { audioManager } from '@/lib/audio';
+import { loadHotelSettings } from '@/lib/storage';
 import { currencyManager } from '@/lib/currency';
-import { receiptPrinter } from '@/lib/printer';
+import { audioManager, playButtonClick, playAddToCart, playOrderComplete } from '@/lib/audio';
+import { 
+  ChefHat, 
+  Plus, 
+  Minus, 
+  Search, 
+  ShoppingCart, 
+  CreditCard, 
+  DollarSign, 
+  Users, 
+  Clock,
+  Utensils,
+  Star
+} from 'lucide-react-native';
 
 type MenuItem = Database['public']['Tables']['menu_items']['Row'];
 type Order = Database['public']['Tables']['orders']['Row'];
@@ -41,122 +46,29 @@ interface CartItem {
   specialInstructions?: string;
 }
 
-interface POSCategory {
-  id: string;
-  name: string;
-  color: string[];
-  icon: string;
-  items: MenuItem[];
-}
-
-// Constants for validation
-const MAX_QUANTITY = 99;
-const MIN_QUANTITY = 1;
-const MAX_ORDER_VALUE = 10000;
-const ORDER_TIMEOUT = 30000; // 30 seconds
-
 export default function Restaurant() {
-  // Enhanced state management with proper error handling
+  const { user } = useAuthContext();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [currentGuest, setCurrentGuest] = useState('GUEST 1 OF 3');
-  const [serverName] = useState('WALDO T');
-  const [tableNumber, setTableNumber] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [tableNumber, setTableNumber] = useState('');
   const [hotelSettings, setHotelSettings] = useState<any>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastOrderId, setLastOrderId] = useState<string | null>(null);
-  const [networkStatus, setNetworkStatus] = useState<'online' | 'offline' | 'checking'>('checking');
-  const [retryCount, setRetryCount] = useState(0);
-  const [sessionId] = useState(() => Date.now().toString());
 
-  // Performance optimizations
-  const optimizedMenuItems = useOptimizedMenuItems(menuItems, 'restaurant');
-  const optimizedCategories = useOptimizedCategories(optimizedMenuItems, 'restaurant');
-  const optimizedSearchResults = useOptimizedSearch(optimizedMenuItems, searchQuery);
-
-  // Accessibility support
-  const announceToScreenReader = useScreenReaderAnnouncement();
-
-  // Initialize component
   useEffect(() => {
-    initializeAccessibility();
-    initializeComponent();
-    
-    // Cleanup on unmount
-    return () => {
-      posStateManager.cleanup();
-      posErrorHandler.clearErrorLog();
-    };
+    loadData();
+    loadSettings();
+    initializeAudio();
   }, []);
 
-  const initializeAccessibility = async () => {
+  const initializeAudio = async () => {
     try {
-      await posAccessibilityManager.initialize();
+      await audioManager.initialize();
     } catch (error) {
-      console.warn('Accessibility initialization failed (non-critical):', error);
-    }
-  };
-
-  const initializeComponent = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      setNetworkStatus('checking');
-      
-      // Initialize database first
-      await db.initialize();
-      
-      // Then load other data
-      await loadData();
-      await loadSettings();
-      await initializeAudio();
-      
-      // Load saved POS state
-      await loadPOSState();
-      
-      setNetworkStatus('online');
-      announceToScreenReader('Restaurant POS system loaded successfully');
-    } catch (error) {
-      const posError = posErrorHandler.handleError(error, {
-        component: 'RestaurantPOS',
-        action: 'initializeComponent',
-        timestamp: new Date().toISOString(),
-        additionalData: { sessionId }
-      });
-      
-      setError(posError.message);
-      setNetworkStatus('offline');
-      
-      // Attempt recovery
-      if (posError.retryable && retryCount < 3) {
-        setTimeout(() => {
-          setRetryCount(prev => prev + 1);
-          initializeComponent();
-        }, 2000 * (retryCount + 1));
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadPOSState = async () => {
-    try {
-      const savedState = await posStateManager.loadState('restaurant');
-      if (savedState.cart.length > 0) {
-        setCart(savedState.cart);
-        announceToScreenReader(`Restored ${savedState.cart.length} items from previous session`);
-      }
-      if (savedState.tableNumber) {
-        setTableNumber(savedState.tableNumber);
-      }
-    } catch (error) {
-      console.warn('Failed to load POS state (non-critical):', error);
+      console.warn('Audio initialization failed (non-critical):', error);
     }
   };
 
@@ -169,289 +81,152 @@ export default function Restaurant() {
       }
     } catch (error) {
       console.error('Error loading settings:', error);
-      // Use default settings if loading fails
-      setHotelSettings({
-        currency: 'USD',
-        taxRate: 8.5,
-        serviceChargeRate: 10.0,
-        hotelName: 'Grand Hotel'
-      });
-    }
-  };
-
-  const initializeAudio = async () => {
-    try {
-      await audioManager.initialize();
-    } catch (error) {
-      console.warn('Audio initialization failed (non-critical):', error);
-      // Audio failure is non-critical, continue without audio
     }
   };
 
   const loadData = async () => {
     try {
-      const [menuData, ordersData] = await Promise.all([
-        db.select<MenuItem>('menu_items'),
-        db.select<Order>('orders')
-      ]);
+      setLoading(true);
+      await db.initialize();
+      const menuData = await db.select<MenuItem>('menu_items', {
+        filters: { is_available: true }
+      });
       
-      // Filter and validate menu items
       const restaurantItems = menuData.filter(item => 
-        ['appetizer', 'main_course', 'dessert', 'beverage'].includes(item.category) &&
-        item.is_available &&
-        item.price > 0
-      );
-      
-      const restaurantOrders = ordersData.filter(order => 
-        order.order_type === 'restaurant' || order.order_type === 'room_service'
+        ['appetizer', 'main_course', 'dessert', 'beverage'].includes(item.category)
       );
       
       setMenuItems(restaurantItems);
-      setOrders(restaurantOrders);
-      
     } catch (error) {
-      console.error('Error loading data:', error);
-      setError('Failed to load menu data. Please check your connection and try again.');
-      throw error;
+      console.error('Error loading menu items:', error);
+      Alert.alert('Error', 'Failed to load menu items. Please refresh the page.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Memoized categories to prevent unnecessary recalculations
-  const categories: POSCategory[] = useMemo(() => [
+  const categories = useMemo(() => [
+    {
+      id: 'all',
+      name: 'ALL ITEMS',
+      color: ['#64748b', '#475569'],
+      icon: '🍽️',
+      items: menuItems,
+    },
     {
       id: 'appetizers',
       name: 'APPETIZERS',
       color: ['#ff6b6b', '#ee5a52'],
       icon: '🥗',
-      items: menuItems.filter(item => item.category === 'appetizer')
+      items: menuItems.filter(item => item.category === 'appetizer'),
     },
     {
       id: 'mains',
       name: 'MAIN COURSE',
       color: ['#4ecdc4', '#44a08d'],
       icon: '🍽️',
-      items: menuItems.filter(item => item.category === 'main_course')
+      items: menuItems.filter(item => item.category === 'main_course'),
     },
     {
       id: 'desserts',
       name: 'DESSERTS',
       color: ['#a8e6cf', '#7fcdcd'],
       icon: '🍰',
-      items: menuItems.filter(item => item.category === 'dessert')
+      items: menuItems.filter(item => item.category === 'dessert'),
     },
     {
       id: 'beverages',
       name: 'BEVERAGES',
       color: ['#ffd93d', '#6bcf7f'],
       icon: '🥤',
-      items: menuItems.filter(item => item.category === 'beverage')
+      items: menuItems.filter(item => item.category === 'beverage'),
     },
-    {
-      id: 'specials',
-      name: 'CHEF SPECIALS',
-      color: ['#ff9ff3', '#f368e0'],
-      icon: '⭐',
-      items: menuItems.filter(item => item.name.toLowerCase().includes('special'))
-    },
-    {
-      id: 'salads',
-      name: 'SALADS',
-      color: ['#95e1d3', '#fce38a'],
-      icon: '🥬',
-      items: menuItems.filter(item => item.name.toLowerCase().includes('salad'))
-    }
   ], [menuItems]);
 
-  // Validation functions
-  const validateMenuItem = (menuItem: MenuItem): boolean => {
-    if (!menuItem || !menuItem.id) {
-      setError('Invalid menu item selected');
-      return false;
-    }
-    if (menuItem.price <= 0) {
-      setError('Menu item has invalid price');
-      return false;
-    }
-    if (!menuItem.is_available) {
-      setError('This item is currently unavailable');
-      return false;
-    }
-    return true;
-  };
+  const filteredItems = useMemo(() => {
+    const categoryItems = selectedCategory === 'all' 
+      ? menuItems 
+      : categories.find(cat => cat.id === selectedCategory)?.items || [];
 
-  const validateQuantity = (quantity: number): boolean => {
-    if (quantity < MIN_QUANTITY) {
-      setError(`Minimum quantity is ${MIN_QUANTITY}`);
-      return false;
+    if (!searchQuery.trim()) {
+      return categoryItems;
     }
-    if (quantity > MAX_QUANTITY) {
-      setError(`Maximum quantity is ${MAX_QUANTITY}`);
-      return false;
-    }
-    return true;
-  };
 
-  const validateCart = (): boolean => {
-    if (cart.length === 0) {
-      setError('Cart is empty. Please add items before proceeding.');
-      return false;
-    }
-    
-    const total = calculateTotal().total;
-    if (total > MAX_ORDER_VALUE) {
-      setError(`Order value exceeds maximum limit of ${formatCurrency(MAX_ORDER_VALUE)}`);
-      return false;
-    }
-    
-    return true;
-  };
+    const query = searchQuery.toLowerCase();
+    return categoryItems.filter(item =>
+      item.name.toLowerCase().includes(query) ||
+      item.description.toLowerCase().includes(query)
+    );
+  }, [menuItems, selectedCategory, searchQuery, categories]);
 
   const addToCart = useCallback((menuItem: MenuItem) => {
+    if (isProcessing) return;
+    
     try {
-      setError(null);
+      playAddToCart();
       
-      const validation = POSValidator.validateMenuItem(menuItem);
-      if (!validation.isValid) {
-        setError(validation.error || 'Invalid menu item');
-        announceToScreenReader(`Cannot add item: ${validation.error}`);
-        return;
-      }
-
-      // Play sound effect
-      audioManager.playSound('addToCart').catch(() => {});
-      
-      const existingItem = cart.find(item => item.menuItem.id === menuItem.id);
-      if (existingItem) {
-        const newQuantity = existingItem.quantity + 1;
-        const quantityValidation = POSValidator.validateQuantity(newQuantity);
-        if (!quantityValidation.isValid) {
-          setError(quantityValidation.error || 'Invalid quantity');
-          announceToScreenReader(`Cannot add more: ${quantityValidation.error}`);
-          return;
+      setCart(prevCart => {
+        const existingIndex = prevCart.findIndex(item => item.menuItem.id === menuItem.id);
+        
+        if (existingIndex >= 0) {
+          const newCart = [...prevCart];
+          newCart[existingIndex].quantity += 1;
+          return newCart;
+        } else {
+          return [...prevCart, { menuItem, quantity: 1 }];
         }
-        
-        setCart(cart.map(item => 
-          item.menuItem.id === menuItem.id 
-            ? { ...item, quantity: newQuantity }
-            : item
-        ));
-        
-        announceToScreenReader(`Increased ${menuItem.name} to ${newQuantity}`);
-      } else {
-        setCart([...cart, { menuItem, quantity: 1 }]);
-        announceToScreenReader(`Added ${menuItem.name} to cart`);
-      }
-      
-      // Save state
-      posStateManager.updateState({ cart: cart });
-    } catch (error) {
-      const posError = posErrorHandler.handleError(error, {
-        component: 'RestaurantPOS',
-        action: 'addToCart',
-        timestamp: new Date().toISOString(),
-        additionalData: { menuItemId: menuItem.id, menuItemName: menuItem.name }
       });
-      
-      setError(posError.message);
-      announceToScreenReader(`Error adding item: ${posError.message}`);
-    }
-  }, [cart]);
-
-  const removeFromCart = useCallback((menuItemId: string) => {
-    try {
-      setError(null);
-      setCart(cart.filter(item => item.menuItem.id !== menuItemId));
-      audioManager.playSound('buttonClick').catch(() => {});
     } catch (error) {
-      console.error('Error removing from cart:', error);
-      setError('Failed to remove item from cart.');
+      console.error('Error adding to cart:', error);
     }
-  }, [cart]);
+  }, [isProcessing]);
 
-  const updateQuantity = useCallback((menuItemId: string, quantity: number) => {
+  const updateQuantity = useCallback((menuItemId: string, newQuantity: number) => {
+    if (isProcessing) return;
+    
     try {
-      setError(null);
+      playButtonClick();
       
-      if (quantity <= 0) {
-        removeFromCart(menuItemId);
-        return;
+      if (newQuantity <= 0) {
+        setCart(prevCart => prevCart.filter(item => item.menuItem.id !== menuItemId));
+      } else if (newQuantity <= 99) {
+        setCart(prevCart => 
+          prevCart.map(item => 
+            item.menuItem.id === menuItemId 
+              ? { ...item, quantity: newQuantity }
+              : item
+          )
+        );
       }
-      
-      if (!validateQuantity(quantity)) {
-        return;
-      }
-
-      setCart(cart.map(item => 
-        item.menuItem.id === menuItemId 
-          ? { ...item, quantity }
-          : item
-      ));
     } catch (error) {
       console.error('Error updating quantity:', error);
-      setError('Failed to update quantity.');
     }
-  }, [cart, removeFromCart]);
+  }, [isProcessing]);
 
-  const calculateTotal = useCallback(() => {
-    try {
-      const subtotal = cart.reduce((sum, item) => {
-        // Validate each item before calculation
-        if (!item.menuItem || item.menuItem.price < 0 || item.quantity < 0) {
-          console.warn('Invalid cart item detected:', item);
-          return sum;
-        }
-        const itemTotal = item.menuItem.price * item.quantity;
-        return sum + itemTotal;
-      }, 0);
-      
-      if (subtotal < 0) {
-        console.warn('Negative subtotal detected:', subtotal);
-        return { subtotal: 0, tax: 0, serviceCharge: 0, total: 0 };
-      }
-      
-      // Validate tax rates
-      const taxRate = Math.max(0, Math.min(50, hotelSettings?.taxRate || 8.5)) / 100; // 0-50% max
-      const serviceChargeRate = Math.max(0, Math.min(30, hotelSettings?.serviceChargeRate || 0)) / 100; // 0-30% max
-      
-      const tax = Math.round(subtotal * taxRate * 100) / 100; // Proper rounding
-      const serviceCharge = Math.round(subtotal * serviceChargeRate * 100) / 100;
-      const total = Math.round((subtotal + tax + serviceCharge) * 100) / 100;
-      
-      return { subtotal, tax, serviceCharge, total };
-    } catch (error) {
-      console.error('Error calculating total:', error);
-      setError('Failed to calculate order total. Please refresh and try again.');
-      return { subtotal: 0, tax: 0, serviceCharge: 0, total: 0 };
-    }
+  const calculateTotals = useMemo(() => {
+    const subtotal = cart.reduce((sum, item) => sum + (item.menuItem.price * item.quantity), 0);
+    const taxRate = (hotelSettings?.taxRate || 8.5) / 100;
+    const serviceChargeRate = (hotelSettings?.serviceChargeRate || 0) / 100;
+    
+    const tax = subtotal * taxRate;
+    const serviceCharge = subtotal * serviceChargeRate;
+    const total = subtotal + tax + serviceCharge;
+
+    return { subtotal, tax, serviceCharge, total };
   }, [cart, hotelSettings]);
 
-  const generateUniqueOrderNumber = (): string => {
-    // More robust unique ID generation
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-    const counter = Math.floor(Math.random() * 100).toString().padStart(2, '0');
-    return `R-${timestamp}-${random}-${counter}`;
-  };
+  const processOrder = async (paymentMethod: string) => {
+    if (isProcessing) return;
+    
+    if (cart.length === 0) {
+      Alert.alert('Error', 'Please add items to cart before placing order');
+      return;
+    }
 
-  const createOrder = async (paymentMethod: string, paymentStatus: 'pending' | 'paid' = 'paid') => {
+    setIsProcessing(true);
+
     try {
-      // Validate cart before creating order
-      if (!validateCart()) {
-        return null;
-      }
-
-      const { subtotal, tax, serviceCharge, total } = calculateTotal();
-      
-      if (total <= 0) {
-        setError('Invalid order total. Please check your items.');
-        return null;
-      }
-      
-      // Validate payment amount
-      if (total > MAX_ORDER_VALUE) {
-        setError(`Order value exceeds maximum limit of ${formatCurrency(MAX_ORDER_VALUE)}`);
-        return null;
-      }
+      const orderNumber = `R-${Date.now()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
       
       const orderItems = cart.map(item => ({
         menu_item_id: item.menuItem.id,
@@ -460,865 +235,366 @@ export default function Restaurant() {
         special_instructions: item.specialInstructions || '',
       }));
 
-      const orderNumber = generateUniqueOrderNumber();
-      
-      const orderData = {
+      const newOrder = await db.insert<Order>('orders', {
         order_number: orderNumber,
-        table_number: tableNumber || 'Restaurant',
-        order_type: 'restaurant' as const,
+        table_number: tableNumber || 'Restaurant Service',
+        order_type: 'restaurant',
         items: orderItems,
-        subtotal,
-        tax_amount: tax,
-        service_charge: serviceCharge,
-        total_amount: total,
-        status: 'confirmed' as const,
-        payment_status: paymentStatus,
-        payment_method: paymentMethod,
-      };
+        subtotal: calculateTotals.subtotal,
+        tax_amount: calculateTotals.tax,
+        service_charge: calculateTotals.serviceCharge,
+        total_amount: calculateTotals.total,
+        status: 'confirmed',
+        payment_status: paymentMethod === 'ROOM CHARGE' ? 'pending' : 'paid',
+        payment_method: paymentMethod.toLowerCase().replace(/\s+/g, '_'),
+      });
 
-      const newOrder = await db.insert<Order>('orders', orderData);
-      
       // Create financial transaction
-      try {
-        await db.insert('transactions', {
-          transaction_number: `TXN-${orderNumber}`,
-          type: 'income',
-          category: 'food_beverage',
-          amount: total,
-          description: `Restaurant order - ${paymentMethod}`,
-          reference_id: newOrder.id,
-          payment_method: paymentMethod.toLowerCase().replace(' ', '_'),
-          transaction_date: new Date().toISOString().split('T')[0],
-          processed_by: 'restaurant_pos',
-        });
-      } catch (transactionError) {
-        console.warn('Failed to create transaction record:', transactionError);
-        // Continue with order creation even if transaction fails
-      }
-
-      setLastOrderId(newOrder.id);
-      return newOrder;
-    } catch (error) {
-      console.error('Error creating order:', error);
-      setError(`Failed to create order: ${error.message || 'Unknown error'}`);
-      return null;
-    }
-  };
-
-  const completePayment = async (paymentMethod: string) => {
-    // Prevent multiple simultaneous operations
-    if (isProcessing) {
-      Alert.alert('Please Wait', 'Another operation is in progress...');
-      announceToScreenReader('Please wait, another operation is in progress');
-      return;
-    }
-
-    try {
-      setIsProcessing(true);
-      setError(null);
-      
-      // Validate cart one more time before payment
-      const cartValidation = POSValidator.validateCart(cart);
-      if (!cartValidation.isValid) {
-        setError(cartValidation.error || 'Invalid cart');
-        announceToScreenReader(`Cannot process payment: ${cartValidation.error}`);
-        setIsProcessing(false);
-        return;
-      }
-      
-      const order = await posOrderManager.createOrder({
-        cart,
-        tableNumber,
-        orderType: 'restaurant',
-        paymentMethod,
-        paymentStatus: 'paid',
-        hotelSettings
+      await db.insert('transactions', {
+        transaction_number: `TXN-${orderNumber}`,
+        type: 'income',
+        category: 'food_beverage',
+        amount: calculateTotals.total,
+        description: `Restaurant order - ${paymentMethod}`,
+        reference_id: newOrder.id,
+        payment_method: paymentMethod.toLowerCase().replace(/\s+/g, '_'),
+        transaction_date: new Date().toISOString().split('T')[0],
+        processed_by: user?.id || 'pos_system',
       });
+
+      playOrderComplete();
+      Alert.alert('Success', `Order ${orderNumber} placed successfully!`);
       
-      if (!order) {
-        setIsProcessing(false);
-        return; // Error already set in createOrder
-      }
-
-      // Play success sound
-      audioManager.playSound('orderComplete').catch(() => {});
-      
-      const totals = posOrderManager.calculateOrderTotal(cart, hotelSettings);
-      
-      announceToScreenReader(`Payment successful for ${posOrderManager.formatCurrency(totals.total)}`);
-      
-      Alert.alert(
-        'Payment Successful! ✅', 
-        `Order #${order.order_number}\nPayment: ${paymentMethod}\nTotal: ${posOrderManager.formatCurrency(totals.total)}\n\nOrder sent to kitchen for preparation.`,
-        [{ 
-          text: 'OK', 
-          onPress: () => {
-            clearCart();
-            loadData(); // Refresh orders
-          }
-        }]
-      );
-      
-    } catch (error) {
-      const posError = posErrorHandler.handleError(error, {
-        component: 'RestaurantPOS',
-        action: 'completePayment',
-        timestamp: new Date().toISOString(),
-        additionalData: { paymentMethod, cartItems: cart.length }
-      });
-      
-      setError(posError.message);
-      announceToScreenReader(`Payment failed: ${posError.message}`);
-      
-      Alert.alert(
-        'Payment Failed ❌', 
-        posError.message,
-        [
-          ...(posError.retryable ? [{ text: 'Retry', onPress: () => completePayment(paymentMethod) }] : []),
-          { text: 'Cancel', style: 'cancel' }
-        ]
-      );
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleNoReceipt = () => {
-    if (!validateCart()) return;
-    
-    const { total } = calculateTotal();
-    Alert.alert(
-      'Complete Order',
-      `Process order for ${formatCurrency(total)} without printing receipt?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Complete', onPress: () => completePayment('No Receipt') }
-      ]
-    );
-  };
-
-  const handlePlaceOrder = async () => {
-    if (!validateCart()) return;
-    
-    const { total } = calculateTotal();
-    Alert.alert(
-      'Send to Kitchen',
-      `Send order for ${formatCurrency(total)} to kitchen for preparation?\n\nYou can process payment after kitchen confirms the order.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Send Order', onPress: () => placeOrderOnly() }
-      ]
-    );
-  };
-
-  const placeOrderOnly = async () => {
-    try {
-      setIsProcessing(true);
-      setError(null);
-      
-      // Validate cart before placing order
-      if (!validateCart()) {
-        setIsProcessing(false);
-        return;
-      }
-      
-      const order = await createOrder('Pending Payment', 'pending');
-      if (!order) {
-        setIsProcessing(false);
-        return;
-      }
-
-      audioManager.playSound('buttonClick').catch(() => {});
-      
-      Alert.alert(
-        'Order Sent! 📨',
-        `Order #${order.order_number} sent to kitchen.\n\nKitchen will prepare your order. Process payment when ready.`,
-        [{ 
-          text: 'OK',
-          onPress: () => {
-            // Don't clear cart yet - keep for payment processing
-            loadData();
-          }
-        }]
-      );
-      
-    } catch (error) {
-      console.error('Error placing order:', error);
-      setError(`Failed to send order to kitchen: ${error.message || 'Unknown error'}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleCashPayment = () => {
-    if (!validateCart()) return;
-    
-    const { total } = calculateTotal();
-    Alert.alert(
-      'Cash Payment 💵',
-      `Process cash payment of ${formatCurrency(total)}?\n\nPlease ensure you have received the correct amount from the customer.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Process Payment', onPress: () => completePayment('Cash') }
-      ]
-    );
-  };
-
-  const handleCreditPayment = () => {
-    if (!validateCart()) return;
-    
-    const { total } = calculateTotal();
-    Alert.alert(
-      'Credit Card Payment 💳',
-      `Process credit card payment of ${formatCurrency(total)}?\n\nEnsure the card reader is ready and the customer has inserted their card.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Process Payment', onPress: () => completePayment('Credit Card') }
-      ]
-    );
-  };
-
-  const handleSettle = () => {
-    if (!validateCart()) return;
-    
-    audioManager.playSound('buttonClick').catch(() => {});
-    
-    Alert.alert(
-      'Settlement Options ⚙️',
-      'Choose how to settle this order:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Room Charge 🏨', onPress: () => handleRoomCharge() },
-        { text: 'Complimentary 🎁', onPress: () => handleComplimentary() },
-        { text: 'Split Bill 📊', onPress: () => handleSplitBill() }
-      ]
-    );
-  };
-
-  const handleRoomCharge = () => {
-    if (!validateCart()) return;
-    
-    const { total } = calculateTotal();
-    Alert.prompt(
-      'Room Charge 🏨',
-      `Charge ${formatCurrency(total)} to which room number?\n\nPlease verify the room number with the guest.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Charge Room', 
-          onPress: (roomNumber) => {
-            const trimmedRoom = roomNumber?.trim() || '';
-            if (trimmedRoom && /^[a-zA-Z0-9]+$/.test(trimmedRoom)) {
-              completePayment(`Room ${roomNumber.trim()} Charge`);
-            } else {
-              Alert.alert('Invalid Room Number', 'Please enter a valid room number (e.g., 101, 205, A12)');
-            }
-          }
-        }
-      ],
-      'plain-text',
-      '',
-      'numeric'
-    );
-  };
-
-  const handleComplimentary = () => {
-    const { total } = calculateTotal();
-    Alert.alert(
-      'Complimentary Order 🎁',
-      `Mark order for ${formatCurrency(total)} as complimentary (free)?\n\nThis action requires manager approval in a real system.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Confirm Complimentary', 
-          onPress: () => completePayment('Complimentary')
-        }
-      ]
-    );
-  };
-
-  const handleSplitBill = () => {
-    const { total } = calculateTotal();
-    Alert.alert(
-      'Split Bill Options 📊',
-      `Total amount: ${formatCurrency(total)}\n\nHow would you like to split this bill?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Split Evenly', onPress: () => handleEvenSplit() },
-        { text: 'Split by Item', onPress: () => handleItemSplit() },
-        { text: 'Custom Split', onPress: () => handleCustomSplit() }
-      ]
-    );
-  };
-
-  const handleEvenSplit = () => {
-    if (!validateCart()) return;
-    
-    Alert.prompt(
-      'Split Evenly 👥',
-      'How many people will split this bill?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Calculate Split',
-          onPress: (value) => {
-            const ways = parseInt(value || '2');
-            if (ways >= 2 && ways <= 10) {
-              const { total } = calculateTotal();
-              const amountPerPerson = Math.round((total / ways) * 100) / 100; // Proper rounding
-              Alert.alert(
-                'Split Bill Calculation 🧮',
-                `${formatCurrency(total)} ÷ ${ways} people = ${formatCurrency(amountPerPerson)} per person\n\nProceed with split payment?`,
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Process Split', onPress: () => completePayment(`Split ${ways} ways - ${formatCurrency(amountPerPerson)} each`) }
-                ]
-              );
-            } else {
-              Alert.alert('Invalid Split', 'Please enter a number between 2 and 10 people.');
-            }
-          }
-        }
-      ],
-      'plain-text',
-      '2',
-      'numeric'
-    );
-  };
-
-  const handleItemSplit = () => {
-    Alert.alert(
-      'Split by Item 📝',
-      'This feature allows customers to pay for specific items individually.\n\nIn a full implementation, this would show an item-by-item selection interface.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Continue with Item Split', onPress: () => completePayment('Split by Item') }
-      ]
-    );
-  };
-
-  const handleCustomSplit = () => {
-    Alert.alert(
-      'Custom Split 💰',
-      'This feature allows entering custom amounts for each payment.\n\nIn a full implementation, this would show an amount entry interface for each payment.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Continue with Custom Split', onPress: () => completePayment('Custom Split') }
-      ]
-    );
-  };
-
-  const clearCart = useCallback(() => {
-    try {
-      setError(null);
-      
-      if (cart.length === 0) {
-        announceToScreenReader('Cart is already empty');
-        return;
-      }
-      
-      audioManager.playSound('buttonClick').catch(() => {});
+      // Clear cart and reset
       setCart([]);
-      posStateManager.clearCart();
-      announceToScreenReader('Cart cleared');
-    } catch (error) {
-      const posError = posErrorHandler.handleError(error, {
-        component: 'RestaurantPOS',
-        action: 'clearCart',
-        timestamp: new Date().toISOString()
-      });
+      setTableNumber('');
       
-      setError(posError.message);
-      announceToScreenReader(`Error clearing cart: ${posError.message}`);
+    } catch (error) {
+      console.error('Error processing order:', error);
+      Alert.alert('Error', 'Failed to process order. Please try again.');
+    } finally {
+      setIsProcessing(false);
     }
-  }, [cart]);
+  };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setError(null);
-    try {
-      await loadData();
-    } catch (error) {
-      setError('Failed to refresh data. Please try again.');
-    } finally {
-      setRefreshing(false);
-    }
+    await loadData();
+    setRefreshing(false);
   }, []);
 
   const formatCurrency = useCallback((amount: number) => {
     try {
       return currencyManager.formatAmount(amount, hotelSettings?.currency);
     } catch (error) {
-      console.error('Currency formatting error:', error);
-      return `$${amount.toFixed(2)}`; // Fallback formatting
+      return `$${amount.toFixed(2)}`;
     }
   }, [hotelSettings]);
 
-  const getFilteredItems = useMemo(() => {
-    try {
-      if (selectedCategory === 'all') {
-        return menuItems.filter(item => 
-          item.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
-          item.is_available &&
-          item.price > 0
-        );
-      }
-      
-      const category = categories.find(cat => cat.id === selectedCategory);
-      return category ? category.items.filter(item => 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
-        item.is_available &&
-        item.price > 0
-      ) : [];
-    } catch (error) {
-      console.error('Error filtering items:', error);
-      return [];
-    }
-  }, [menuItems, selectedCategory, searchQuery, categories]);
-
-  // Memoized calculations for performance
-  const totals = useMemo(() => {
-    try {
-      return posOrderManager.calculateOrderTotal(cart, hotelSettings);
-    } catch (error) {
-      console.warn('Error calculating totals:', error);
-      return { subtotal: 0, tax: 0, serviceCharge: 0, total: 0 };
-    }
-  }, [cart, hotelSettings]);
-  
-  const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
-  const hasItems = cart.length > 0;
-  
-  // Optimized filtered items
-  const filteredItems = useMemo(() => {
-    if (selectedCategory === 'all') {
-      return searchQuery ? optimizedSearchResults : optimizedMenuItems;
-    }
-    
-    const category = optimizedCategories.find(cat => cat.id === selectedCategory);
-    const categoryItems = category ? category.items : [];
-    
-    if (searchQuery) {
-      return categoryItems.filter(item => 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-    
-    return categoryItems;
-  }, [optimizedMenuItems, optimizedCategories, optimizedSearchResults, selectedCategory, searchQuery]);
-
-  if (loading) {
-    return (
-      <POSErrorBoundary posType="restaurant">
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#ecf0f1" />
-          <Text style={styles.loadingText}>Loading Restaurant POS...</Text>
-        </View>
-      </SafeAreaView>
-      </POSErrorBoundary>
-    );
-  }
-
-  if (error && !hotelSettings) {
-    return (
-      <POSErrorBoundary posType="restaurant">
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <AlertTriangle size={48} color="#e74c3c" />
-          <Text style={styles.errorTitle}>System Error</Text>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={initializeComponent}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-      </POSErrorBoundary>
-    );
-  }
-
   return (
     <POSErrorBoundary posType="restaurant">
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <LinearGradient
-        colors={['#2c3e50', '#34495e']}
-        style={styles.header}
-      >
-        <View style={styles.headerLeft}>
-          <View style={styles.logoContainer}>
-            <ChefHat size={24} color="#ecf0f1" />
-            <Text style={styles.brandName}>foodiv</Text>
-          </View>
-          <View style={styles.orderInfo}>
-            <Text style={styles.orderType}>RESTAURANT POS</Text>
-            <Text style={styles.serverInfo}>SERVER: {serverName}</Text>
-          </View>
-        </View>
-        
-        <View style={styles.headerCenter}>
-          <Text style={styles.guestInfo}>{currentGuest}</Text>
-          <Text style={styles.cartInfo}>
-            {cartCount} item{cartCount !== 1 ? 's' : ''} • {formatCurrency(totals.total)}
-          </Text>
-        </View>
-
-        <View style={styles.headerRight}>
-          <TouchableOpacity 
-            style={styles.searchButton}
-            onPress={() => {
-              // Focus search input or show search modal
-              Keyboard.dismiss();
-            }}
-          >
-            <Search size={20} color="#ecf0f1" />
-            <Text style={styles.searchText}>SEARCH</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      {/* Error Display */}
-      {error && (
-        <View style={styles.errorBanner}>
-          <AlertTriangle size={16} color="#e74c3c" />
-          <Text style={styles.errorBannerText}>{error}</Text>
-          <TouchableOpacity onPress={() => setError(null)}>
-            <Text style={styles.errorDismiss}>✕</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <View style={styles.mainContent}>
-        {/* Left Panel - Categories and Items */}
-        <View style={styles.leftPanel}>
-          {/* Search Input */}
-          <View style={styles.searchContainer}>
-            <Search size={16} color="#7f8c8d" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search menu items..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor="#7f8c8d"
-            />
-          </View>
-
-          {/* Category Grid */}
-          <View style={styles.categoryGrid}>
-            <TouchableOpacity
-              style={[styles.categoryTile, selectedCategory === 'all' && styles.selectedCategory]}
-              onPress={() => {
-                setSelectedCategory('all');
-                audioManager.playSound('buttonClick').catch(() => {});
-              }}
-            >
-              <LinearGradient
-                colors={selectedCategory === 'all' ? ['#3498db', '#2980b9'] : ['#ecf0f1', '#bdc3c7']}
-                style={styles.categoryGradient}
-              >
-                <Text style={styles.categoryIcon}>🍴</Text>
-                <Text style={[styles.categoryText, { color: selectedCategory === 'all' ? '#fff' : '#2c3e50' }]}>
-                  ALL ITEMS
-                </Text>
-                <Text style={styles.categoryCount}>({menuItems.length})</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            {categories.map((category) => (
-              <TouchableOpacity
-                key={category.id}
-                style={[styles.categoryTile, selectedCategory === category.id && styles.selectedCategory]}
-                onPress={() => {
-                  setSelectedCategory(category.id);
-                  audioManager.playSound('buttonClick').catch(() => {});
-                }}
-              >
-                <LinearGradient
-                  colors={selectedCategory === category.id ? category.color : ['#ecf0f1', '#bdc3c7']}
-                  style={styles.categoryGradient}
-                >
-                  <Text style={styles.categoryIcon}>{category.icon}</Text>
-                  <Text style={[styles.categoryText, { color: selectedCategory === category.id ? '#fff' : '#2c3e50' }]}>
-                    {category.name}
-                  </Text>
-                  <Text style={styles.categoryCount}>({category.items.length})</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Menu Items Grid */}
-          <ScrollView 
-            style={styles.itemsGrid}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.itemsContainer}>
-              {filteredItems.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.menuItemTile}
-                  onPress={() => addToCart(item)}
-                  disabled={isProcessing}
-                  activeOpacity={0.8}
-                  accessible={true}
-                  accessibilityLabel={posAccessibilityManager.generateMenuItemLabel(item)}
-                  accessibilityRole="button"
-                  accessibilityHint="Double tap to add to cart"
-                >
-                  <LinearGradient
-                    colors={['#e74c3c', '#c0392b']}
-                    style={styles.menuItemGradient}
-                  >
-                    <Text style={styles.menuItemName} numberOfLines={2}>
-                      {item.name.toUpperCase()}
-                    </Text>
-                    <Text style={styles.menuItemPrice}>{formatCurrency(item.price)}</Text>
-                    {item.prep_time_minutes > 0 && (
-                      <Text style={styles.menuItemTime}>
-                        {item.prep_time_minutes}min
-                      </Text>
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-              ))}
-              
-              {filteredItems.length === 0 && (
-                <View style={styles.noItemsContainer}>
-                  <Text style={styles.noItemsText}>
-                    {searchQuery ? 'No items found matching your search' : 'No items available in this category'}
-                  </Text>
+      <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={['#1e3a8a', '#3b82f6']}
+          style={styles.headerGradient}
+        >
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <View style={styles.titleContainer}>
+                <ChefHat size={28} color="white" />
+                <View>
+                  <Text style={styles.title}>Restaurant POS</Text>
+                  <Text style={styles.subtitle}>Food Service System</Text>
                 </View>
-              )}
+              </View>
             </View>
-          </ScrollView>
-        </View>
+          </View>
+        </LinearGradient>
 
-        {/* Right Panel - Order Management */}
-        <View style={styles.rightPanel}>
-          <LinearGradient
-            colors={['#ecf0f1', '#bdc3c7']}
-            style={styles.orderPanel}
-          >
-            {/* Table Number Input */}
-            <View style={styles.tableNumberContainer}>
-              <Text style={styles.tableLabel}>TABLE #</Text>
+        <View style={styles.mainContent}>
+          {/* Left Panel - Menu */}
+          <View style={styles.leftPanel}>
+            {/* Search */}
+            <View style={styles.searchContainer}>
+              <Search size={20} color="#64748b" />
               <TextInput
-                style={styles.tableInput}
-                value={tableNumber}
-                onChangeText={setTableNumber}
-                placeholder="Enter table number"
-                keyboardType="numeric"
-                maxLength={3}
+                style={styles.searchInput}
+                placeholder="Search menu items..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholderTextColor="#94a3b8"
               />
             </View>
 
-            {/* Order List */}
-            <ScrollView style={styles.orderList} showsVerticalScrollIndicator={false}>
-              {cart.map((item, index) => (
-                <View key={`${item.menuItem.id}-${index}`} style={styles.orderItem}>
-                  <View style={styles.orderItemHeader}>
-                    <TouchableOpacity 
-                      style={styles.removeButton}
-                      onPress={() => removeFromCart(item.menuItem.id)}
-                      accessible={true}
-                      accessibilityLabel={`Remove ${item.menuItem.name} from cart`}
-                      accessibilityRole="button"
-                    >
-                      <Text style={styles.removeButtonText}>✕</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.orderItemNumber}>{index + 1}</Text>
-                    <Text style={styles.orderItemName} numberOfLines={2}>
-                      {item.menuItem.name.toUpperCase()}
+            {/* Categories */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.categoriesContainer}
+            >
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[
+                    styles.categoryButton,
+                    selectedCategory === category.id && styles.activeCategoryButton
+                  ]}
+                  onPress={() => {
+                    playButtonClick();
+                    setSelectedCategory(category.id);
+                  }}
+                >
+                  <LinearGradient
+                    colors={selectedCategory === category.id ? category.color : ['#f8fafc', '#f1f5f9']}
+                    style={styles.categoryGradient}
+                  >
+                    <Text style={styles.categoryIcon}>{category.icon}</Text>
+                    <Text style={[
+                      styles.categoryText,
+                      selectedCategory === category.id && styles.activeCategoryText
+                    ]}>
+                      {category.name}
                     </Text>
-                    <Text style={styles.orderItemPrice}>
-                      {formatCurrency(item.menuItem.price * item.quantity)}
+                    <Text style={[
+                      styles.categoryCount,
+                      selectedCategory === category.id && styles.activeCategoryCount
+                    ]}>
+                      ({category.items.length})
                     </Text>
-                  </View>
-                  <View style={styles.orderItemDetails}>
-                    <Text style={styles.orderItemCategory}>
-                      {item.menuItem.category.toUpperCase()}
-                    </Text>
-                    <View style={styles.quantityControls}>
-                      <TouchableOpacity
-                        style={[styles.quantityButton, { opacity: item.quantity <= 1 ? 0.5 : 1 }]}
-                        onPress={() => updateQuantity(item.menuItem.id, item.quantity - 1)}
-                        disabled={item.quantity <= 1}
-                        accessible={true}
-                        accessibilityLabel={`Decrease quantity of ${item.menuItem.name}`}
-                        accessibilityRole="button"
-                      >
-                        <Text style={styles.quantityButtonText}>-</Text>
-                      </TouchableOpacity>
-                      <Text style={styles.quantity}>{item.quantity}</Text>
-                      <TouchableOpacity
-                        style={[styles.quantityButton, { opacity: item.quantity >= POSValidator.MAX_QUANTITY ? 0.5 : 1 }]}
-                        onPress={() => updateQuantity(item.menuItem.id, item.quantity + 1)}
-                        disabled={item.quantity >= POSValidator.MAX_QUANTITY}
-                        accessible={true}
-                        accessibilityLabel={`Increase quantity of ${item.menuItem.name}`}
-                        accessibilityRole="button"
-                      >
-                        <Text style={styles.quantityButtonText}>+</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
+                  </LinearGradient>
+                </TouchableOpacity>
               ))}
-              
-              {cart.length === 0 && (
-                <View style={styles.emptyCartContainer}>
-                  <ChefHat size={48} color="#bdc3c7" />
-                  <Text style={styles.emptyCartText}>Cart is empty</Text>
-                  <Text style={styles.emptyCartSubtext}>Add items from the menu to get started</Text>
-                </View>
-              )}
             </ScrollView>
 
-            {/* Order Total */}
-            <View style={styles.orderTotal}>
-              <View style={styles.totalDisplay}>
-                <View style={styles.totalBreakdown}>
-                  <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>Subtotal:</Text>
-                    <Text style={styles.totalValue}>{formatCurrency(totals.subtotal)}</Text>
+            {/* Menu Items */}
+            <ScrollView
+              style={styles.menuItemsContainer}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
+              <View style={styles.menuGrid}>
+                {filteredItems.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.menuItemCard}
+                    onPress={() => addToCart(item)}
+                    disabled={!item.is_available || isProcessing}
+                  >
+                    <LinearGradient
+                      colors={item.is_available ? ['#ffffff', '#f8fafc'] : ['#f1f5f9', '#e2e8f0']}
+                      style={styles.menuItemGradient}
+                    >
+                      <View style={styles.menuItemHeader}>
+                        <Text style={[
+                          styles.menuItemName,
+                          !item.is_available && styles.unavailableText
+                        ]}>
+                          {item.name}
+                        </Text>
+                        <Text style={[
+                          styles.menuItemPrice,
+                          !item.is_available && styles.unavailableText
+                        ]}>
+                          {formatCurrency(item.price)}
+                        </Text>
+                      </View>
+                      
+                      <Text style={[
+                        styles.menuItemDescription,
+                        !item.is_available && styles.unavailableText
+                      ]}>
+                        {item.description}
+                      </Text>
+
+                      <View style={styles.menuItemFooter}>
+                        <View style={styles.menuItemMeta}>
+                          {item.prep_time_minutes > 0 && (
+                            <View style={styles.metaItem}>
+                              <Clock size={12} color="#64748b" />
+                              <Text style={styles.metaText}>{item.prep_time_minutes}min</Text>
+                            </View>
+                          )}
+                          {item.is_vegetarian && (
+                            <Text style={styles.dietaryFlag}>🌱</Text>
+                          )}
+                          {item.is_vegan && (
+                            <Text style={styles.dietaryFlag}>🌿</Text>
+                          )}
+                          {item.is_gluten_free && (
+                            <Text style={styles.dietaryFlag}>🌾</Text>
+                          )}
+                        </View>
+                        
+                        {!item.is_available && (
+                          <Text style={styles.unavailableLabel}>Unavailable</Text>
+                        )}
+                      </View>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+
+          {/* Right Panel - Cart */}
+          <View style={styles.rightPanel}>
+            <LinearGradient
+              colors={['#ffffff', '#f8fafc']}
+              style={styles.cartContainer}
+            >
+              {/* Cart Header */}
+              <View style={styles.cartHeader}>
+                <View style={styles.cartTitleContainer}>
+                  <ShoppingCart size={24} color="#1e3a8a" />
+                  <Text style={styles.cartTitle}>Current Order</Text>
+                </View>
+                <Text style={styles.cartItemCount}>
+                  {cart.reduce((sum, item) => sum + item.quantity, 0)} items
+                </Text>
+              </View>
+
+              {/* Table Number */}
+              <View style={styles.tableNumberContainer}>
+                <Text style={styles.tableNumberLabel}>Table Number:</Text>
+                <TextInput
+                  style={styles.tableNumberInput}
+                  value={tableNumber}
+                  onChangeText={setTableNumber}
+                  placeholder="Enter table number"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              {/* Cart Items */}
+              <ScrollView style={styles.cartItemsContainer}>
+                {cart.length === 0 ? (
+                  <View style={styles.emptyCart}>
+                    <Utensils size={48} color="#cbd5e1" />
+                    <Text style={styles.emptyCartText}>No items in cart</Text>
+                    <Text style={styles.emptyCartSubtext}>Add items from the menu</Text>
                   </View>
-                  <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>Tax ({((hotelSettings?.taxRate || 8.5))}%):</Text>
-                    <Text style={styles.totalValue}>{formatCurrency(totals.tax)}</Text>
+                ) : (
+                  cart.map((item, index) => (
+                    <View key={`${item.menuItem.id}-${index}`} style={styles.cartItem}>
+                      <View style={styles.cartItemInfo}>
+                        <Text style={styles.cartItemName}>{item.menuItem.name}</Text>
+                        <Text style={styles.cartItemPrice}>
+                          {formatCurrency(item.menuItem.price)} each
+                        </Text>
+                      </View>
+                      
+                      <View style={styles.quantityControls}>
+                        <TouchableOpacity
+                          style={styles.quantityButton}
+                          onPress={() => updateQuantity(item.menuItem.id, item.quantity - 1)}
+                          disabled={isProcessing}
+                        >
+                          <Minus size={16} color="#ef4444" />
+                        </TouchableOpacity>
+                        
+                        <Text style={styles.quantityText}>{item.quantity}</Text>
+                        
+                        <TouchableOpacity
+                          style={styles.quantityButton}
+                          onPress={() => updateQuantity(item.menuItem.id, item.quantity + 1)}
+                          disabled={isProcessing || item.quantity >= 99}
+                        >
+                          <Plus size={16} color="#10b981" />
+                        </TouchableOpacity>
+                      </View>
+                      
+                      <Text style={styles.cartItemTotal}>
+                        {formatCurrency(item.menuItem.price * item.quantity)}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+
+              {/* Order Summary */}
+              {cart.length > 0 && (
+                <View style={styles.orderSummary}>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Subtotal:</Text>
+                    <Text style={styles.summaryValue}>{formatCurrency(calculateTotals.subtotal)}</Text>
                   </View>
-                  {totals.serviceCharge > 0 && (
-                    <View style={styles.totalRow}>
-                      <Text style={styles.totalLabel}>Service ({((hotelSettings?.serviceChargeRate || 0))}%):</Text>
-                      <Text style={styles.totalValue}>{formatCurrency(totals.serviceCharge)}</Text>
+                  
+                  {calculateTotals.tax > 0 && (
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Tax ({((hotelSettings?.taxRate || 8.5))}%):</Text>
+                      <Text style={styles.summaryValue}>{formatCurrency(calculateTotals.tax)}</Text>
                     </View>
                   )}
-                  <View style={[styles.totalRow, styles.grandTotalRow]}>
-                    <Text style={styles.grandTotalLabel}>TOTAL:</Text>
-                    <Text 
-                      style={styles.grandTotalValue}
-                      accessible={true}
-                      accessibilityLabel={posAccessibilityManager.generateOrderTotalLabel(totals)}
-                    >
-                      {posOrderManager.formatCurrency(totals.total, hotelSettings?.currency)}
-                    </Text>
+                  
+                  {calculateTotals.serviceCharge > 0 && (
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Service ({((hotelSettings?.serviceChargeRate || 0))}%):</Text>
+                      <Text style={styles.summaryValue}>{formatCurrency(calculateTotals.serviceCharge)}</Text>
+                    </View>
+                  )}
+                  
+                  <View style={[styles.summaryRow, styles.totalRow]}>
+                    <Text style={styles.totalLabel}>TOTAL:</Text>
+                    <Text style={styles.totalValue}>{formatCurrency(calculateTotals.total)}</Text>
                   </View>
                 </View>
-              </View>
-            </View>
+              )}
 
-            {/* Action Buttons */}
-            <View style={styles.actionButtons}>
-              <View style={styles.topButtons}>
-                <TouchableOpacity 
-                  style={[
-                    styles.actionButton, 
-                    { backgroundColor: hasItems && !isProcessing ? '#95a5a6' : '#7f8c8d' }
-                  ]}
-                  onPress={hasItems && !isProcessing ? handleNoReceipt : undefined}
-                  disabled={!hasItems || isProcessing}
-                  activeOpacity={hasItems && !isProcessing ? 0.7 : 1}
-                  accessible={true}
-                  accessibilityLabel="Complete order without receipt"
-                  accessibilityRole="button"
-                >
-                  <Receipt size={16} color="#fff" />
-                  <Text style={styles.actionButtonText}>NO RECEIPT</Text>
-                </TouchableOpacity>
+              {/* Payment Buttons */}
+              {cart.length > 0 && (
+                <View style={styles.paymentButtons}>
+                  <TouchableOpacity
+                    style={[styles.paymentButton, styles.cashButton]}
+                    onPress={() => processOrder('CASH')}
+                    disabled={isProcessing}
+                  >
+                    <LinearGradient
+                      colors={isProcessing ? ['#94a3b8', '#64748b'] : ['#10b981', '#059669']}
+                      style={styles.paymentButtonGradient}
+                    >
+                      <DollarSign size={20} color="white" />
+                      <Text style={styles.paymentButtonText}>CASH</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={[
-                    styles.actionButton, 
-                    { backgroundColor: hasItems && !isProcessing ? '#f39c12' : '#d68910' }
-                  ]}
-                  onPress={hasItems && !isProcessing ? clearCart : undefined}
-                  disabled={!hasItems || isProcessing}
-                  activeOpacity={hasItems && !isProcessing ? 0.7 : 1}
-                  accessible={true}
-                  accessibilityLabel="Clear all items from cart"
-                  accessibilityRole="button"
-                >
-                  <Trash2 size={16} color="#fff" />
-                  <Text style={styles.actionButtonText}>CLEAR</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.paymentButton, styles.creditButton]}
+                    onPress={() => processOrder('CREDIT CARD')}
+                    disabled={isProcessing}
+                  >
+                    <LinearGradient
+                      colors={isProcessing ? ['#94a3b8', '#64748b'] : ['#3b82f6', '#2563eb']}
+                      style={styles.paymentButtonGradient}
+                    >
+                      <CreditCard size={20} color="white" />
+                      <Text style={styles.paymentButtonText}>CREDIT</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={[
-                    styles.actionButton, 
-                    { backgroundColor: hasItems && !isProcessing ? '#27ae60' : '#52c41a' }
-                  ]}
-                  onPress={hasItems && !isProcessing ? handlePlaceOrder : undefined}
-                  disabled={!hasItems || isProcessing}
-                  activeOpacity={hasItems && !isProcessing ? 0.7 : 1}
-                  accessible={true}
-                  accessibilityLabel="Send order to kitchen"
-                  accessibilityRole="button"
-                >
-                  {isProcessing ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <CheckCircle size={16} color="#fff" />
-                  )}
-                  <Text style={styles.actionButtonText}>
-                    {isProcessing ? 'PROCESSING...' : 'ORDER'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.bottomButtons}>
-                <TouchableOpacity 
-                  style={[
-                    styles.paymentButton, 
-                    { backgroundColor: hasItems && !isProcessing ? '#2c3e50' : '#566573' }
-                  ]}
-                  onPress={hasItems && !isProcessing ? handleCashPayment : undefined}
-                  disabled={!hasItems || isProcessing}
-                  activeOpacity={hasItems && !isProcessing ? 0.7 : 1}
-                  accessible={true}
-                  accessibilityLabel={`Process cash payment for ${posOrderManager.formatCurrency(totals.total, hotelSettings?.currency)}`}
-                  accessibilityRole="button"
-                >
-                  <DollarSign size={16} color="#fff" />
-                  <Text style={styles.paymentButtonText}>CASH</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={[
-                    styles.paymentButton, 
-                    { backgroundColor: hasItems && !isProcessing ? '#2c3e50' : '#566573' }
-                  ]}
-                  onPress={hasItems && !isProcessing ? handleCreditPayment : undefined}
-                  disabled={!hasItems || isProcessing}
-                  activeOpacity={hasItems && !isProcessing ? 0.7 : 1}
-                  accessible={true}
-                  accessibilityLabel={`Process credit card payment for ${posOrderManager.formatCurrency(totals.total, hotelSettings?.currency)}`}
-                  accessibilityRole="button"
-                >
-                  <CreditCard size={16} color="#fff" />
-                  <Text style={styles.paymentButtonText}>CREDIT</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={[
-                    styles.paymentButton, 
-                    { backgroundColor: hasItems && !isProcessing ? '#2c3e50' : '#566573' }
-                  ]}
-                  onPress={hasItems && !isProcessing ? handleSettle : undefined}
-                  disabled={!hasItems || isProcessing}
-                  activeOpacity={hasItems && !isProcessing ? 0.7 : 1}
-                  accessible={true}
-                  accessibilityLabel="Show settlement options"
-                  accessibilityRole="button"
-                >
-                  <Settings size={16} color="#fff" />
-                  <Text style={styles.paymentButtonText}>SETTLE</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </LinearGradient>
+                  <TouchableOpacity
+                    style={[styles.paymentButton, styles.roomChargeButton]}
+                    onPress={() => {
+                      if (!tableNumber) {
+                        Alert.alert('Room Required', 'Please enter room number for room charge');
+                        return;
+                      }
+                      processOrder('ROOM CHARGE');
+                    }}
+                    disabled={isProcessing}
+                  >
+                    <LinearGradient
+                      colors={isProcessing ? ['#94a3b8', '#64748b'] : ['#7c3aed', '#6d28d9']}
+                      style={styles.paymentButtonGradient}
+                    >
+                      <Users size={20} color="white" />
+                      <Text style={styles.paymentButtonText}>ROOM</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </LinearGradient>
+          </View>
         </View>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
     </POSErrorBoundary>
   );
 }
@@ -1326,137 +602,38 @@ export default function Restaurant() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#2c3e50',
+    backgroundColor: '#f1f5f9',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#2c3e50',
-  },
-  loadingText: {
-    color: '#ecf0f1',
-    fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    marginTop: 12,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#2c3e50',
-    padding: 20,
-  },
-  errorTitle: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: '#e74c3c',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#ecf0f1',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: '#3498db',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 6,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e74c3c',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  errorBannerText: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-  },
-  errorDismiss: {
-    color: '#fff',
-    fontSize: 16,
-    fontFamily: 'Inter-Bold',
-    paddingHorizontal: 8,
+  headerGradient: {
+    paddingTop: 20,
+    paddingBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    justifyContent: 'space-between',
+    paddingHorizontal: 24,
   },
   headerLeft: {
+    flex: 1,
+  },
+  titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 20,
+    gap: 12,
   },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  brandName: {
-    fontSize: 20,
+  title: {
+    fontSize: 28,
     fontFamily: 'Inter-Bold',
-    color: '#ecf0f1',
+    color: 'white',
   },
-  orderInfo: {
-    alignItems: 'flex-start',
-  },
-  orderType: {
-    fontSize: 12,
-    fontFamily: 'Inter-SemiBold',
-    color: '#ecf0f1',
-  },
-  serverInfo: {
-    fontSize: 10,
-    fontFamily: 'Inter-Regular',
-    color: '#bdc3c7',
-  },
-  headerCenter: {
-    alignItems: 'center',
-  },
-  guestInfo: {
+  subtitle: {
     fontSize: 16,
-    fontFamily: 'Inter-Bold',
-    color: '#ecf0f1',
-    marginBottom: 4,
-  },
-  cartInfo: {
-    fontSize: 12,
     fontFamily: 'Inter-Regular',
-    color: '#bdc3c7',
-  },
-  headerRight: {
-    alignItems: 'flex-end',
-  },
-  searchButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#34495e',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  searchText: {
-    fontSize: 12,
-    fontFamily: 'Inter-SemiBold',
-    color: '#ecf0f1',
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 4,
   },
   mainContent: {
     flex: 1,
@@ -1464,351 +641,354 @@ const styles = StyleSheet.create({
   },
   leftPanel: {
     flex: 2,
-    backgroundColor: '#34495e',
-    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRightWidth: 1,
+    borderRightColor: '#e2e8f0',
+  },
+  rightPanel: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2c3e50',
-    borderRadius: 6,
+    margin: 20,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 16,
+    paddingVertical: 10,
     gap: 8,
   },
   searchInput: {
     flex: 1,
-    color: '#ecf0f1',
-    fontSize: 14,
+    fontSize: 16,
     fontFamily: 'Inter-Regular',
+    color: '#1e293b',
   },
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
+  categoriesContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
-  categoryTile: {
-    width: (width * 0.65 - 48) / 3,
-    height: 90,
-    borderRadius: 8,
-  },
-  selectedCategory: {
-    transform: [{ scale: 1.05 }],
+  categoryButton: {
+    marginRight: 12,
+    borderRadius: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  activeCategoryButton: {
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 4,
   },
   categoryGradient: {
-    flex: 1,
-    borderRadius: 8,
-    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: 'center',
-    padding: 8,
+    minWidth: 120,
   },
   categoryIcon: {
     fontSize: 20,
     marginBottom: 4,
   },
   categoryText: {
-    fontSize: 10,
-    fontFamily: 'Inter-Bold',
-    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: '#64748b',
     textAlign: 'center',
-    marginBottom: 2,
+  },
+  activeCategoryText: {
+    color: 'white',
   },
   categoryCount: {
-    fontSize: 8,
+    fontSize: 10,
     fontFamily: 'Inter-Regular',
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  activeCategoryCount: {
     color: 'rgba(255, 255, 255, 0.8)',
   },
-  itemsGrid: {
+  menuItemsContainer: {
     flex: 1,
+    paddingHorizontal: 20,
   },
-  itemsContainer: {
+  menuGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 16,
+    paddingBottom: 20,
   },
-  menuItemTile: {
-    width: (width * 0.65 - 48) / 4,
-    height: 110,
-    borderRadius: 8,
+  menuItemCard: {
+    width: (width * 0.6 - 60) / 3,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   menuItemGradient: {
-    flex: 1,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 8,
+    borderRadius: 12,
+    padding: 16,
+    height: 140,
+  },
+  menuItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
   },
   menuItemName: {
-    fontSize: 10,
+    fontSize: 14,
     fontFamily: 'Inter-Bold',
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 4,
+    color: '#1e293b',
+    flex: 1,
+    marginRight: 8,
   },
   menuItemPrice: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: 'Inter-Bold',
-    color: '#fff',
-    marginBottom: 2,
+    color: '#1e3a8a',
   },
-  menuItemTime: {
-    fontSize: 8,
+  menuItemDescription: {
+    fontSize: 12,
     fontFamily: 'Inter-Regular',
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  noItemsContainer: {
+    color: '#64748b',
+    lineHeight: 16,
     flex: 1,
-    justifyContent: 'center',
+  },
+  menuItemFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: 8,
+  },
+  menuItemMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  metaText: {
+    fontSize: 10,
+    fontFamily: 'Inter-Regular',
+    color: '#64748b',
+  },
+  dietaryFlag: {
+    fontSize: 12,
+  },
+  unavailableText: {
+    color: '#94a3b8',
+  },
+  unavailableLabel: {
+    fontSize: 10,
+    fontFamily: 'Inter-SemiBold',
+    color: '#ef4444',
+  },
+  cartContainer: {
+    flex: 1,
+    margin: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  cartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
   },
-  noItemsText: {
-    color: '#bdc3c7',
+  cartTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cartTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    color: '#1e293b',
+  },
+  cartItemCount: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    textAlign: 'center',
-  },
-  rightPanel: {
-    flex: 1,
-    backgroundColor: '#2c3e50',
-    padding: 2,
-  },
-  orderPanel: {
-    flex: 1,
-    borderRadius: 8,
-    padding: 16,
+    color: '#64748b',
   },
   tableNumberContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  tableNumberLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#374151',
+  },
+  tableNumberInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    marginBottom: 16,
-    gap: 8,
-  },
-  tableLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
-    color: '#2c3e50',
-  },
-  tableInput: {
-    flex: 1,
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    color: '#2c3e50',
-    textAlign: 'center',
+    backgroundColor: '#fafafa',
   },
-  orderList: {
+  cartItemsContainer: {
     flex: 1,
-    marginBottom: 16,
+    paddingHorizontal: 20,
   },
-  orderItem: {
-    backgroundColor: '#fff',
-    borderRadius: 6,
-    marginBottom: 8,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  orderItemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  removeButton: {
-    width: 20,
-    height: 20,
-    backgroundColor: '#e74c3c',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  removeButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
-  },
-  orderItemNumber: {
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
-    color: '#2c3e50',
-    minWidth: 16,
-  },
-  orderItemName: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2c3e50',
-  },
-  orderItemPrice: {
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
-    color: '#2c3e50',
-  },
-  orderItemDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingLeft: 28,
-  },
-  orderItemCategory: {
-    fontSize: 10,
-    fontFamily: 'Inter-Regular',
-    color: '#7f8c8d',
-    flex: 1,
-  },
-  quantityControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  quantityButton: {
-    width: 24,
-    height: 24,
-    backgroundColor: '#3498db',
-    borderRadius: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quantityButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
-  },
-  quantity: {
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
-    color: '#2c3e50',
-    minWidth: 20,
-    textAlign: 'center',
-  },
-  emptyCartContainer: {
+  emptyCart: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingVertical: 40,
   },
   emptyCartText: {
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
-    color: '#7f8c8d',
+    color: '#64748b',
     marginTop: 12,
   },
   emptyCartSubtext: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#94a3b8',
+    marginTop: 4,
+  },
+  cartItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    gap: 12,
+  },
+  cartItemInfo: {
+    flex: 1,
+  },
+  cartItemName: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1e293b',
+  },
+  cartItemPrice: {
     fontSize: 12,
     fontFamily: 'Inter-Regular',
-    color: '#95a5a6',
-    marginTop: 4,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  quantityButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  quantityText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#1e293b',
+    minWidth: 24,
     textAlign: 'center',
   },
-  orderTotal: {
-    backgroundColor: '#fff',
+  cartItemTotal: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    color: '#1e3a8a',
+    minWidth: 60,
+    textAlign: 'right',
+  },
+  orderSummary: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#64748b',
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1e293b',
+  },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#d1d5db',
+    paddingTop: 8,
+    marginTop: 8,
+    marginBottom: 0,
+  },
+  totalLabel: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    color: '#1e293b',
+  },
+  totalValue: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: '#1e3a8a',
+  },
+  paymentButtons: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+  },
+  paymentButton: {
+    flex: 1,
     borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
-  totalDisplay: {
-    alignItems: 'stretch',
-  },
-  totalBreakdown: {
-    gap: 4,
-  },
-  totalRow: {
+  paymentButtonGradient: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  totalLabel: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#7f8c8d',
-  },
-  totalValue: {
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2c3e50',
-  },
-  grandTotalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#bdc3c7',
-    paddingTop: 8,
-    marginTop: 8,
-  },
-  grandTotalLabel: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#2c3e50',
-  },
-  grandTotalValue: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: '#27ae60',
-  },
-  actionButtons: {
-    gap: 8,
-  },
-  topButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    flex: 1,
-    height: 48,
-    borderRadius: 6,
-    flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  actionButtonText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
-    color: '#fff',
-  },
-  bottomButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  paymentButton: {
-    flex: 1,
-    height: 48,
-    borderRadius: 6,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingVertical: 14,
+    borderRadius: 8,
+    gap: 6,
   },
   paymentButtonText: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: 'Inter-Bold',
-    color: '#fff',
+    color: 'white',
   },
+  cashButton: {},
+  creditButton: {},
+  roomChargeButton: {},
 });
