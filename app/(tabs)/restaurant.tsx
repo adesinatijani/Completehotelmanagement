@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { db } from '@/lib/database';
-import { db } from '@/lib/database';
 import { Database } from '@/types/database';
 import { loadHotelSettings, saveHotelSettings } from '@/lib/storage';
 import { currencyManager } from '@/lib/currency';
