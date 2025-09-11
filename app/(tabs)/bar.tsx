@@ -79,8 +79,6 @@ export default function Bar() {
   const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
   const [pendingOrder, setPendingOrder] = useState<any>(null);
   
-  
-
   useEffect(() => {
     loadData();
     loadSettings();
