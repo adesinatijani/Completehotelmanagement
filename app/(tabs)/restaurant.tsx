@@ -39,10 +39,7 @@ export default function Restaurant() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [currentGuest, setCurrentGuest] = useState(1);
   const [totalGuests] = useState(3);
   const [serverName] = useState('WALDO T');
@@ -87,65 +84,6 @@ export default function Restaurant() {
       setLoading(false);
     }
   };
-
-  const categories = useMemo(() => [
-    {
-      id: 'appetizers',
-      name: 'APPETIZERS',
-      color: ['#ff6b6b', '#ee5a52'],
-      icon: '🥗',
-      items: menuItems.filter(item => item.category === 'appetizer'),
-    },
-    {
-      id: 'mains',
-      name: 'MAIN COURSE',
-      color: ['#4ecdc4', '#44a08d'],
-      icon: '🍽️',
-      items: menuItems.filter(item => item.category === 'main_course'),
-    },
-    {
-      id: 'desserts',
-      name: 'DESSERTS',
-      color: ['#a8e6cf', '#7fcdcd'],
-      icon: '🍰',
-      items: menuItems.filter(item => item.category === 'dessert'),
-    },
-    {
-      id: 'beverages',
-      name: 'BEVERAGES',
-      color: ['#ffd93d', '#6bcf7f'],
-      icon: '🥤',
-      items: menuItems.filter(item => item.category === 'beverage'),
-    },
-    {
-      id: 'burgers',
-      name: 'BURGERS',
-      color: ['#8B4513', '#A0522D'],
-      icon: '🍔',
-      items: menuItems.filter(item => item.name.toLowerCase().includes('burger')),
-    },
-    {
-      id: 'platters',
-      name: 'PLATTERS',
-      color: ['#CD853F', '#DEB887'],
-      icon: '🍽️',
-      items: menuItems.filter(item => item.name.toLowerCase().includes('platter')),
-    },
-    {
-      id: 'seafood',
-      name: 'SEAFOOD',
-      color: ['#20B2AA', '#48D1CC'],
-      icon: '🐟',
-      items: menuItems.filter(item => item.name.toLowerCase().includes('fish') || item.name.toLowerCase().includes('salmon') || item.name.toLowerCase().includes('shrimp')),
-    },
-    {
-      id: 'subs',
-      name: 'SUBS',
-      color: ['#FF4500', '#FF6347'],
-      icon: '🥪',
-      items: menuItems.filter(item => item.name.toLowerCase().includes('sub')),
-    },
-  ], [menuItems]);
 
   const addToCart = useCallback((menuItem: MenuItem) => {
     if (isProcessing) return;
@@ -376,11 +314,6 @@ export default function Restaurant() {
     );
   }, [cart, calculateTotals, formatCurrency]);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
-  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -426,60 +359,56 @@ export default function Restaurant() {
 
           {/* Order Items */}
           <ScrollView style={styles.orderItemsContainer}>
-            {[1, 2, 3].map((guestNum) => (
-              <View key={guestNum} style={styles.guestSection}>
-                <View style={styles.guestHeader}>
-                  <Text style={styles.guestLabel}>GUEST {guestNum}</Text>
-                </View>
-                
-                {cart.filter((_, index) => (index % 3) === (guestNum - 1)).map((item, index) => (
-                  <View key={`${item.menuItem.id}-${index}`} style={styles.orderItem}>
-                    <View style={styles.orderItemLeft}>
-                      <TouchableOpacity 
-                        style={styles.playButton}
-                        onPress={() => Alert.alert('Item Options', `Options for ${item.menuItem.name}`)}
-                      >
-                        <Text style={styles.playButtonText}>▶</Text>
-                      </TouchableOpacity>
-                      <Text style={styles.orderItemNumber}>{index + 1}</Text>
-                    </View>
-                    <View style={styles.orderItemCenter}>
-                      <Text style={styles.orderItemName}>{item.menuItem.name}</Text>
-                      <Text style={styles.orderItemDetails}>
-                        {item.menuItem.description.substring(0, 30)}...
-                      </Text>
-                    </View>
-                    <TouchableOpacity 
-                      style={styles.priceButton}
-                      onPress={() => {
-                        Alert.prompt(
-                          'Update Quantity',
-                          `Current quantity: ${item.quantity}`,
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            { 
-                              text: 'Update', 
-                              onPress: (value) => {
-                                const newQty = parseInt(value || '0');
-                                if (newQty > 0) {
-                                  updateQuantity(item.menuItem.id, newQty);
-                                }
-                              }
-                            }
-                          ],
-                          'plain-text',
-                          item.quantity.toString()
-                        );
-                      }}
-                    >
-                      <Text style={styles.orderItemPrice}>
-                        {formatCurrency(item.menuItem.price * item.quantity)}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
+            <View style={styles.guestSection}>
+              <View style={styles.guestHeader}>
+                <Text style={styles.guestLabel}>GUEST {currentGuest}</Text>
               </View>
-            ))}
+              
+              {cart.map((item, index) => (
+                <View key={`${item.menuItem.id}-${index}`} style={styles.orderItem}>
+                  <View style={styles.orderItemLeft}>
+                    <TouchableOpacity 
+                      style={styles.playButton}
+                      onPress={() => Alert.alert('Item Options', `Options for ${item.menuItem.name}`)}
+                    >
+                      <Text style={styles.playButtonText}>▶</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.orderItemNumber}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.orderItemCenter}>
+                    <Text style={styles.orderItemName}>{item.menuItem.name}</Text>
+                    <Text style={styles.orderItemDetails}>
+                      Qty: {item.quantity} × {formatCurrency(item.menuItem.price)}
+                    </Text>
+                  </View>
+                  <View style={styles.orderItemRight}>
+                    <TouchableOpacity 
+                      style={styles.quantityButton}
+                      onPress={() => updateQuantity(item.menuItem.id, item.quantity - 1)}
+                    >
+                      <Text style={styles.quantityButtonText}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.quantityText}>{item.quantity}</Text>
+                    <TouchableOpacity 
+                      style={styles.quantityButton}
+                      onPress={() => updateQuantity(item.menuItem.id, item.quantity + 1)}
+                    >
+                      <Text style={styles.quantityButtonText}>+</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.orderItemPrice}>
+                      {formatCurrency(item.menuItem.price * item.quantity)}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+              
+              {cart.length === 0 && (
+                <View style={styles.emptyCart}>
+                  <Text style={styles.emptyCartText}>No items in cart</Text>
+                  <Text style={styles.emptyCartSubtext}>Click menu items to add</Text>
+                </View>
+              )}
+            </View>
           </ScrollView>
 
           {/* Order Total */}
@@ -1022,6 +951,31 @@ const styles = StyleSheet.create({
     color: '#7f8c8d',
     marginTop: 2,
   },
+  orderItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quantityButton: {
+    backgroundColor: '#3498db',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+  },
+  quantityText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    color: '#2c3e50',
+    minWidth: 20,
+    textAlign: 'center',
+  },
   priceButton: {
     padding: 4,
   },
@@ -1029,6 +983,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Bold',
     color: '#2c3e50',
+    minWidth: 60,
+    textAlign: 'right',
+  },
+  emptyCart: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyCartText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#7f8c8d',
+  },
+  emptyCartSubtext: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#95a5a6',
+    marginTop: 4,
   },
   orderTotal: {
     backgroundColor: 'white',
