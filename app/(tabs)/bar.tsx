@@ -21,6 +21,8 @@ import { POSErrorBoundary } from '@/components/POSErrorBoundary';
 import { loadHotelSettings } from '@/lib/storage';
 import { currencyManager } from '@/lib/currency';
 import { audioManager, playButtonClick, playAddToCart, playOrderComplete } from '@/lib/audio';
+import { POSValidator, CartItem as ValidatedCartItem } from '@/lib/pos-validation';
+import { posOrderManager } from '@/lib/pos-order-manager';
 import { 
   Wine, 
   Plus, 
@@ -40,11 +42,7 @@ type Order = Database['public']['Tables']['orders']['Row'];
 
 const { width, height } = Dimensions.get('window');
 
-interface CartItem {
-  menuItem: MenuItem;
-  quantity: number;
-  specialInstructions?: string;
-}
+type CartItem = ValidatedCartItem;
 
 export default function Bar() {
   const { user } = useAuthContext();
@@ -232,52 +230,27 @@ export default function Bar() {
   const processOrder = async (paymentMethod: string) => {
     if (isProcessing) return;
     
-    if (cart.length === 0) {
-      Alert.alert('Error', 'Please add items to cart before placing order');
+    // Validate cart before processing
+    const cartValidation = POSValidator.validateCart(cart);
+    if (!cartValidation.isValid) {
+      Alert.alert('Error', cartValidation.error || 'Invalid cart');
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      const orderNumber = `B-${Date.now()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
-      
-      const orderItems = cart.map(item => ({
-        menu_item_id: item.menuItem.id,
-        quantity: item.quantity,
-        unit_price: item.menuItem.price,
-        special_instructions: item.specialInstructions || '',
-      }));
-
-      const newOrder = await db.insert<Order>('orders', {
-        order_number: orderNumber,
-        table_number: tableNumber || 'Bar Service',
-        order_type: 'bar',
-        items: orderItems,
-        subtotal: calculateTotals.subtotal,
-        tax_amount: calculateTotals.tax,
-        service_charge: calculateTotals.serviceCharge,
-        total_amount: calculateTotals.total,
-        status: 'confirmed',
-        payment_status: paymentMethod === 'ROOM CHARGE' ? 'pending' : 'paid',
-        payment_method: paymentMethod.toLowerCase().replace(/\s+/g, '_'),
-      });
-
-      // Create financial transaction
-      await db.insert('transactions', {
-        transaction_number: `TXN-${orderNumber}`,
-        type: 'income',
-        category: 'food_beverage',
-        amount: calculateTotals.total,
-        description: `Bar order - ${paymentMethod}`,
-        reference_id: newOrder.id,
-        payment_method: paymentMethod.toLowerCase().replace(/\s+/g, '_'),
-        transaction_date: new Date().toISOString().split('T')[0],
-        processed_by: user?.id || 'pos_system',
+      const newOrder = await posOrderManager.createOrder({
+        cart,
+        tableNumber: tableNumber || 'Bar Service',
+        orderType: 'bar',
+        paymentMethod,
+        paymentStatus: paymentMethod === 'ROOM CHARGE' ? 'pending' : 'paid',
+        hotelSettings,
       });
 
       playOrderComplete();
-      Alert.alert('Success', `Order ${orderNumber} placed successfully!`);
+      Alert.alert('Success', `Order ${newOrder.order_number} placed successfully!`);
       
       // Clear cart and reset
       setCart([]);
@@ -534,14 +507,14 @@ export default function Bar() {
                   
                   {calculateTotals.tax > 0 && (
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Tax ({((hotelSettings?.taxRate || 8.5))}%):</Text>
+                      <Text style={styles.summaryLabel}>Tax ({(hotelSettings?.taxRate || 8.5)}%):</Text>
                       <Text style={styles.summaryValue}>{formatCurrency(calculateTotals.tax)}</Text>
                     </View>
                   )}
                   
                   {calculateTotals.serviceCharge > 0 && (
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Service ({((hotelSettings?.serviceChargeRate || 0))}%):</Text>
+                      <Text style={styles.summaryLabel}>Service ({(hotelSettings?.serviceChargeRate || 0)}%):</Text>
                       <Text style={styles.summaryValue}>{formatCurrency(calculateTotals.serviceCharge)}</Text>
                     </View>
                   )}
