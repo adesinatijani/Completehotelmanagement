@@ -457,6 +457,7 @@ export default function Restaurant() {
           style: 'destructive',
           onPress: () => {
             setCart([]);
+            Alert.alert('Order Cancelled', 'All items have been removed from the cart');
           }
         }
       ]

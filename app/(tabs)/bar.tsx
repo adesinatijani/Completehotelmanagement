@@ -999,4 +999,12 @@ const styles = StyleSheet.create({
   bottomButton: {
     flex: 1,
     alignItems: 'center',
+    paddingVertical: 8,
+  },
+  bottomButtonText: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: '#bdc3c7',
+  },
+});
     
