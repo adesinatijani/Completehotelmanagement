@@ -655,13 +655,11 @@ export default function Restaurant() {
                   style={[styles.actionButton, { backgroundColor: '#95a5a6' }]}
                   onPress={handleNoReceipt}
                   activeOpacity={0.7}
-                  activeOpacity={0.7}
                 >
                   <Receipt size={16} color="#fff" />
                   <Text style={styles.actionButtonText}>NO RECEIPT</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
                 <TouchableOpacity 
                   style={[styles.actionButton, { backgroundColor: '#f39c12' }]}
                   onPress={clearCart}
@@ -679,8 +677,6 @@ export default function Restaurant() {
                   onPress={cart.length > 0 ? placeOrder : undefined}
                   disabled={cart.length === 0}
                   activeOpacity={0.7}
-                  disabled={cart.length === 0}
-                  activeOpacity={0.7}
                 >
                   <Text style={styles.actionButtonText}>
                     {orderPlaced ? 'ORDER PLACED' : 'ORDER'}
@@ -693,13 +689,11 @@ export default function Restaurant() {
                   style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
                   onPress={handleCashPayment}
                   activeOpacity={0.7}
-                  activeOpacity={0.7}
                 >
                   <DollarSign size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>CASH</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
                 <TouchableOpacity 
                   style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
                   onPress={handleCreditPayment}
@@ -709,7 +703,6 @@ export default function Restaurant() {
                   <Text style={styles.paymentButtonText}>CREDIT</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
                 <TouchableOpacity 
                   style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
                   onPress={handleSettle}
