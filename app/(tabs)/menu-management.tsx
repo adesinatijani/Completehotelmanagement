@@ -706,6 +706,40 @@ export default function MenuManagement() {
                   </View>
 
                   <View style={styles.formGroup}>
+                    <Text style={styles.formLabel}>Category</Text>
+                    <ScrollView horizontal style={styles.categorySelector}>
+                      {categories.map((category) => (
+                        <TouchableOpacity
+                          key={category}
+                          style={[
+                            styles.categoryOption,
+                            selectedItem.category === category && styles.categoryOptionActive,
+                          ]}
+                          onPress={() => setSelectedItem({ ...selectedItem, category })}
+                        >
+                          <Text style={styles.categoryOptionIcon}>{getCategoryIcon(category)}</Text>
+                          <Text style={[
+                            styles.categoryOptionText,
+                            selectedItem.category === category && styles.categoryOptionTextActive,
+                          ]}>
+                            {category.replace('_', ' ').charAt(0).toUpperCase() + category.replace('_', ' ').slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  <View style={styles.formGroup}>
+                    <Text style={styles.formLabel}>Subcategory</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={selectedItem.subcategory || ''}
+                      onChangeText={(text) => setSelectedItem({ ...selectedItem, subcategory: text })}
+                      placeholder="Enter subcategory (optional)"
+                    />
+                  </View>
+
+                  <View style={styles.formGroup}>
                     <Text style={styles.formLabel}>Dietary Options</Text>
                     <View style={styles.switchContainer}>
                       <View style={styles.switchRow}>
@@ -732,7 +766,12 @@ export default function MenuManagement() {
                     </View>
                   </View>
                   <TouchableOpacity style={styles.updateButton} onPress={updateMenuItem}>
-                    <Text style={styles.updateButtonText}>Update Menu Item</Text>
+                    <LinearGradient
+                      colors={['#059669', '#10b981']}
+                      style={styles.updateButtonGradient}
+                    >
+                      <Text style={styles.updateButtonText}>✅ Update Menu Item</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 </ScrollView>
               </>
@@ -1199,11 +1238,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
   },
   updateButton: {
-    backgroundColor: '#059669',
+    borderRadius: 8,
+    marginTop: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  updateButtonGradient: {
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 20,
   },
   updateButtonText: {
     color: 'white',
