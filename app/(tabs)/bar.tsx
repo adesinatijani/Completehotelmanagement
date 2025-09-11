@@ -286,6 +286,7 @@ export default function Bar() {
   };
 
   const handleCashPayment = () => {
+    const { total } = calculateTotal();
     Alert.alert(
       'Cash Payment',
       `Process cash payment of ${formatCurrency(total)}?`,
@@ -297,6 +298,7 @@ export default function Bar() {
   };
 
   const handleCreditPayment = () => {
+    const { total } = calculateTotal();
     Alert.alert(
       'Credit Card Payment',
       `Process credit card payment of ${formatCurrency(total)}?`,
@@ -333,7 +335,17 @@ export default function Bar() {
   };
 
   const handleRoomCharge = async () => {
-    completePayment('Room Charge');
+    Alert.alert(
+      'Room Charge',
+      'Which room should be charged?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Charge Room', 
+          onPress: () => completePayment('Room Charge')
+        }
+      ]
+    );
   };
 
   const handleComplimentary = async () => {
@@ -355,8 +367,62 @@ export default function Bar() {
   const handleSplitBill = () => {
     Alert.alert(
       'Split Bill',
-      'Split bill functionality would allow dividing the order among multiple payments. This feature would be implemented with a detailed split interface.',
-      [{ text: 'OK' }]
+      'How would you like to split this bill?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Split Evenly', onPress: () => handleEvenSplit() },
+        { text: 'Split by Item', onPress: () => handleItemSplit() },
+        { text: 'Custom Split', onPress: () => handleCustomSplit() }
+      ]
+    );
+  };
+
+  const handleEvenSplit = () => {
+    Alert.prompt(
+      'Split Evenly',
+      'How many ways to split?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Split',
+          onPress: (value) => {
+            const ways = parseInt(value || '2');
+            if (ways > 1) {
+              const { total } = calculateTotal();
+              const amountPerPerson = total / ways;
+              Alert.alert(
+                'Split Bill Result',
+                `${formatCurrency(total)} split ${ways} ways = ${formatCurrency(amountPerPerson)} per person`,
+                [{ text: 'Process', onPress: () => completePayment(`Split ${ways} ways`) }]
+              );
+            }
+          }
+        }
+      ],
+      'plain-text',
+      '2'
+    );
+  };
+
+  const handleItemSplit = () => {
+    Alert.alert(
+      'Split by Item',
+      'This would allow selecting specific items for each person. Feature would show item-by-item selection interface.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', onPress: () => completePayment('Split by Item') }
+      ]
+    );
+  };
+
+  const handleCustomSplit = () => {
+    Alert.alert(
+      'Custom Split',
+      'This would allow entering custom amounts for each payment. Feature would show amount entry interface.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', onPress: () => completePayment('Custom Split') }
+      ]
     );
   };
   const onRefresh = React.useCallback(async () => {
