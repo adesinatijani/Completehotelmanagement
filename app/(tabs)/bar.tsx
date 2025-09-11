@@ -11,9 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { db } from '@/lib/database';
-import { Platform } from 'react-native';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
 import { Database } from '@/types/database';
 import { loadHotelSettings } from '@/lib/storage';
 import { currencyManager } from '@/lib/currency';
@@ -303,18 +300,6 @@ export default function Bar() {
         console.warn('Failed to record financial transaction (non-critical):', transactionError);
       }
 
-      // Create financial transaction for accounting
-      try {
-        await db.insert('transactions', {
-          transaction_number: `TXN-${pendingOrder.order_number}`,
-          type: 'income',
-          category: 'food_beverage',
-          amount: pendingOrder.total_amount,
-          description: `Bar order - ${paymentMethod} payment`,
-          reference_id: order.id,
-          payment_method: paymentMethod.toLowerCase(),
-          transaction_date: new Date().toISOString().split('T')[0],
-          processed_by: user?.id || 'pos_system',
         });
         console.log('✅ Financial transaction recorded for bar order');
       } catch (transactionError) {
