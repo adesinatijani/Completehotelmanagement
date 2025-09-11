@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { db } from '@/lib/database';
 import { Database } from '@/types/database';
-import { loadHotelSettings, saveHotelSettings } from '@/lib/storage';
+import { loadHotelSettings } from '@/lib/storage';
 import { currencyManager } from '@/lib/currency';
 import { 
   Search, 
@@ -78,8 +78,6 @@ export default function Restaurant() {
   const [serverName] = useState('WALDO T');
   const [hotelSettings, setHotelSettings] = useState<any>(null);
   const [receiptOption, setReceiptOption] = useState<'no_receipt' | 'print' | 'email'>('no_receipt');
-  const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
-  const [pendingOrder, setPendingOrder] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -232,9 +230,6 @@ export default function Restaurant() {
         payment_method: null,
       };
       
-      // Store as pending order (don't save to database yet)
-      setPendingOrder(orderData);
-      
       console.log('✅ Pending order created:', orderData);
 
 
@@ -245,7 +240,6 @@ export default function Restaurant() {
       );
       
       // Don't clear cart yet - wait for payment
-      
     } catch (error) {
       console.error('Error creating order:', error);
       Alert.alert('Error', `Failed to create order: ${error.message || error}. Please try again.`);
@@ -257,11 +251,6 @@ export default function Restaurant() {
   const processPayment = useCallback(async (paymentMethod: string) => {
     console.log('💳 Processing payment with method:', paymentMethod);
     
-    if (!pendingOrder) {
-      Alert.alert('Error', 'No pending order. Please create an order first.');
-      return;
-    }
-
     if (isProcessing) {
       console.log('⏳ Already processing payment, ignoring request');
       return;
@@ -270,38 +259,62 @@ export default function Restaurant() {
     setIsProcessing(true);
 
     try {
-      // Update order with payment information
-      const finalOrderData = {
-        ...pendingOrder,
-        status: 'confirmed' as const, // Now send to kitchen
+      // Calculate order totals
+      const totals = calculateTotals;
+      
+      console.log('💰 Order totals calculated:', totals);
+      
+      // Create order items
+      const orderItems = cart.map(item => ({
+        menu_item_id: item.menuItem.id,
+        quantity: item.quantity,
+        unit_price: item.menuItem.price,
+        special_instructions: item.specialInstructions || '',
+      }));
+
+      // Generate order number
+      const orderNumber = `R-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
+      console.log('📋 Creating order:', orderNumber, 'with', orderItems.length, 'items');
+      
+      // Create order data
+      const orderData = {
+        order_number: orderNumber,
+        table_number: `Guest ${currentGuest}`,
+        order_type: 'restaurant' as const,
+        items: orderItems,
+        subtotal: totals.subtotal,
+        tax_amount: totals.tax,
+        service_charge: 0,
+        total_amount: totals.total,
+        status: 'confirmed' as const,
         payment_status: paymentMethod === 'SETTLE' ? 'pending' as const : 'paid' as const,
         payment_method: paymentMethod.toLowerCase(),
       };
       
-      console.log('💾 Saving order to database with payment:', finalOrderData);
+      console.log('💾 Saving order to database with payment:', orderData);
       
-      // Save order to database (now it goes to kitchen)
-      const order = await db.insert('orders', finalOrderData);
+      // Save order to database
+      const order = await db.insert('orders', orderData);
       
       console.log('✅ Order saved and sent to kitchen:', order);
 
       // Handle receipt option
       if (receiptOption === 'print') {
-        Alert.alert('Receipt', `Receipt for order ${pendingOrder.order_number} would be printed`);
+        Alert.alert('Receipt', `Receipt for order ${orderNumber} would be printed`);
       } else if (receiptOption === 'email') {
-        Alert.alert('Receipt', `Receipt for order ${pendingOrder.order_number} would be emailed to guest`);
+        Alert.alert('Receipt', `Receipt for order ${orderNumber} would be emailed to guest`);
       }
 
       Alert.alert(
         'Payment Processed & Order Sent!', 
-        `Order Number: ${pendingOrder.order_number}\nItems: ${cart.length}\nTotal: ${formatCurrency(pendingOrder.total_amount)}\nPayment: ${paymentMethod}\n\n✅ Order sent to kitchen!`,
+        `Order Number: ${orderNumber}\nItems: ${cart.length}\nTotal: ${formatCurrency(totals.total)}\nPayment: ${paymentMethod}\n\n✅ Order sent to kitchen!`,
         [{ text: 'OK' }]
       );
       
       // Clear everything after successful payment
       setCart([]);
-      setPendingOrder(null);
-      console.log('🧹 Cart and pending order cleared after successful payment');
+      console.log('🧹 Cart cleared after successful payment');
       
       if (currentGuest < totalGuests) {
         setCurrentGuest(currentGuest + 1);
@@ -314,7 +327,7 @@ export default function Restaurant() {
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, pendingOrder, cart, receiptOption, formatCurrency, currentGuest, totalGuests]);
+  }, [isProcessing, cart, receiptOption, formatCurrency, currentGuest, totalGuests, calculateTotals]);
 
   const saveOrder = useCallback(() => {
     console.log('💾 Saving order for Guest', currentGuest);
@@ -392,11 +405,11 @@ export default function Restaurant() {
   const cancelOrder = useCallback(() => {
     console.log('❌ Cancelling order');
     
-    if (cart.length === 0 && !pendingOrder) return;
+    if (cart.length === 0) return;
     
     Alert.alert(
       'Cancel Order',
-      `Cancel current order?\n\n${pendingOrder ? 'This will cancel the pending order and ' : ''}remove all ${cart.length} items from your cart.\nTotal value: ${formatCurrency(calculateTotals.total)}\n\nThis action cannot be undone.`,
+      `Cancel current order?\n\nRemove all ${cart.length} items from your cart.\nTotal value: ${formatCurrency(calculateTotals.total)}\n\nThis action cannot be undone.`,
       [
         { text: 'Keep Order', style: 'cancel' },
         { 
@@ -404,13 +417,12 @@ export default function Restaurant() {
           style: 'destructive',
           onPress: () => {
             setCart([]);
-            setPendingOrder(null);
             Alert.alert('Order Cancelled', 'All items have been removed from the cart');
           }
         }
       ]
     );
-  }, [cart, pendingOrder, calculateTotals, formatCurrency]);
+  }, [cart, calculateTotals, formatCurrency]);
 
 
   return (
@@ -530,11 +542,11 @@ export default function Restaurant() {
             <TouchableOpacity 
               style={[styles.actionButton, styles.orderButton]}
               onPress={createOrder}
-              disabled={cart.length === 0 || isProcessing || pendingOrder !== null}
+              disabled={cart.length === 0 || isProcessing}
             >
               <ChefHat size={20} color="white" />
               <Text style={[styles.actionButtonText, styles.orderButtonText]}>
-                {isProcessing ? 'CREATING...' : pendingOrder ? 'ORDER CREATED' : 'ORDER'}
+                {isProcessing ? 'CREATING...' : 'ORDER'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -544,7 +556,7 @@ export default function Restaurant() {
             <TouchableOpacity 
               style={styles.paymentButton}
               onPress={() => processPayment('CASH')}
-              disabled={!pendingOrder || isProcessing}
+              disabled={cart.length === 0 || isProcessing}
             >
               <DollarSign size={20} color="white" />
               <Text style={styles.paymentButtonText}>CASH</Text>
@@ -553,7 +565,7 @@ export default function Restaurant() {
             <TouchableOpacity 
               style={styles.paymentButton}
               onPress={() => processPayment('CREDIT')}
-              disabled={!pendingOrder || isProcessing}
+              disabled={cart.length === 0 || isProcessing}
             >
               <CreditCard size={20} color="white" />
               <Text style={styles.paymentButtonText}>CREDIT</Text>
@@ -562,7 +574,7 @@ export default function Restaurant() {
             <TouchableOpacity 
               style={styles.paymentButton}
               onPress={() => processPayment('SETTLE')}
-              disabled={!pendingOrder || isProcessing}
+              disabled={cart.length === 0 || isProcessing}
             >
               <Users size={20} color="white" />
               <Text style={styles.paymentButtonText}>SETTLE</Text>

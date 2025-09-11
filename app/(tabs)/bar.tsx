@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { db } from '@/lib/database';
 import { Database } from '@/types/database';
-import { loadHotelSettings, saveHotelSettings } from '@/lib/storage';
+import { loadHotelSettings } from '@/lib/storage';
 import { currencyManager } from '@/lib/currency';
 import { 
   Wine, 
@@ -77,8 +77,6 @@ export default function Bar() {
   const [hotelSettings, setHotelSettings] = useState<any>(null);
   const [receiptOption, setReceiptOption] = useState<'no_receipt' | 'print' | 'email'>('no_receipt');
   const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
-  const [pendingOrder, setPendingOrder] = useState<any>(null);
-  const [pendingOrder, setPendingOrder] = useState<any>(null);
 
   useEffect(() => {
     loadData();
