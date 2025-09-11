@@ -188,6 +188,14 @@ export default function Restaurant() {
     return { subtotal, tax, total };
   }, [cart, hotelSettings]);
 
+  const formatCurrency = useCallback((amount: number) => {
+    try {
+      return currencyManager.formatAmount(amount, hotelSettings?.currency);
+    } catch (error) {
+      return `$${amount.toFixed(2)}`;
+    }
+  }, [hotelSettings]);
+
   const processOrder = useCallback(async (paymentMethod: string) => {
     console.log('🔄 Processing order with payment method:', paymentMethod);
     
@@ -228,7 +236,7 @@ export default function Restaurant() {
         status: 'confirmed' as const,
         payment_status: paymentMethod === 'SETTLE' ? 'pending' as const : 'paid' as const,
         payment_method: paymentMethod.toLowerCase(),
-      });
+      };
       
       const order = await db.insert('orders', orderData);
       
@@ -345,14 +353,6 @@ export default function Restaurant() {
     await loadData();
     setRefreshing(false);
   }, []);
-
-  const formatCurrency = useCallback((amount: number) => {
-    try {
-      return currencyManager.formatAmount(amount, hotelSettings?.currency);
-    } catch (error) {
-      return `$${amount.toFixed(2)}`;
-    }
-  }, [hotelSettings]);
 
   return (
     <SafeAreaView style={styles.container}>
