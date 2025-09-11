@@ -11,9 +11,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { db } from '@/lib/database';
+import { db } from '@/lib/database';
 import { Database } from '@/types/database';
-import { loadHotelSettings } from '@/lib/storage';
+import { loadHotelSettings, saveHotelSettings } from '@/lib/storage';
 import { currencyManager } from '@/lib/currency';
+import { Platform } from 'react-native';
 import { 
   Search, 
   CreditCard, 
@@ -33,6 +35,39 @@ interface CartItem {
 }
 
 const { width, height } = Dimensions.get('window');
+
+// Helper functions moved to top
+const getCategoryIcon = (category: MenuItem['category']) => {
+  switch (category) {
+    case 'appetizer': return '🥗';
+    case 'main_course': return '🍽️';
+    case 'dessert': return '🍰';
+    case 'beverage': return '🥤';
+    case 'wine': return '🍷';
+    case 'beer': return '🍺';
+    case 'cocktail': return '🍹';
+    case 'coffee': return '☕';
+    case 'tea': return '🍵';
+    case 'juice': return '🧃';
+    default: return '🍴';
+  }
+};
+
+const getCategoryColor = (category: MenuItem['category']) => {
+  switch (category) {
+    case 'appetizer': return '#e74c3c';
+    case 'main_course': return '#c0392b';
+    case 'dessert': return '#f39c12';
+    case 'beverage': return '#3498db';
+    case 'wine': return '#8B0000';
+    case 'beer': return '#D2691E';
+    case 'cocktail': return '#DC143C';
+    case 'coffee': return '#8B4513';
+    case 'tea': return '#228B22';
+    case 'juice': return '#FF8C00';
+    default: return '#95a5a6';
+  }
+};
 
 export default function Restaurant() {
   const { user } = useAuthContext();
@@ -67,19 +102,23 @@ export default function Restaurant() {
   const loadData = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Loading restaurant menu data...');
       await db.initialize();
       const menuData = await db.select<MenuItem>('menu_items', {
         filters: { is_available: true }
       });
       
+      console.log('📊 Total menu items loaded:', menuData.length);
+      
       const restaurantItems = menuData.filter(item => 
         ['appetizer', 'main_course', 'dessert', 'beverage'].includes(item.category)
       );
       
+      console.log('🍽️ Restaurant items filtered:', restaurantItems.length);
       setMenuItems(restaurantItems);
     } catch (error) {
       console.error('Error loading menu items:', error);
-      Alert.alert('Error', 'Failed to load menu items. Please refresh the page.');
+      Alert.alert('Error', 'Failed to load menu items. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -88,7 +127,7 @@ export default function Restaurant() {
   const addToCart = useCallback((menuItem: MenuItem) => {
     if (isProcessing) return;
     
-    console.log('🛒 Adding to cart:', menuItem.name);
+    console.log('🛒 Adding to restaurant cart:', menuItem.name, 'Price:', menuItem.price);
     
     setCart(prevCart => {
       const existingIndex = prevCart.findIndex(item => item.menuItem.id === menuItem.id);
@@ -96,11 +135,11 @@ export default function Restaurant() {
       if (existingIndex >= 0) {
         const newCart = [...prevCart];
         newCart[existingIndex].quantity += 1;
-        console.log('✅ Updated quantity for existing item:', newCart[existingIndex]);
+        console.log('✅ Updated quantity for existing item:', newCart[existingIndex].menuItem.name, 'New qty:', newCart[existingIndex].quantity);
         return newCart;
       } else {
         const newItem = { menuItem, quantity: 1 };
-        console.log('✅ Added new item to cart:', newItem);
+        console.log('✅ Added new item to cart:', newItem.menuItem.name, 'Qty:', newItem.quantity);
         return [...prevCart, newItem];
       }
     });
@@ -109,7 +148,10 @@ export default function Restaurant() {
   const updateQuantity = useCallback((menuItemId: string, newQuantity: number) => {
     if (isProcessing) return;
     
+    console.log('🔢 Updating quantity for item:', menuItemId, 'New quantity:', newQuantity);
+    
     if (newQuantity <= 0) {
+      console.log('🗑️ Removing item from cart');
       setCart(prevCart => prevCart.filter(item => item.menuItem.id !== menuItemId));
     } else if (newQuantity <= 99) {
       setCart(prevCart => 
@@ -119,6 +161,7 @@ export default function Restaurant() {
             : item
         )
       );
+      console.log('✅ Quantity updated successfully');
     }
   }, [isProcessing]);
 
@@ -141,6 +184,7 @@ export default function Restaurant() {
 
   const processOrder = useCallback(async (paymentMethod: string) => {
     console.log('🔄 Processing order with payment method:', paymentMethod);
+    console.log('🛒 Current cart items:', cart.length);
     
     if (isProcessing) {
       console.log('⏳ Already processing, ignoring request');
@@ -148,6 +192,7 @@ export default function Restaurant() {
     }
     
     if (cart.length === 0) {
+      console.log('❌ Cart is empty, cannot process order');
       Alert.alert('Order Error', 'Please add items to cart before placing order');
       return;
     }
@@ -207,8 +252,10 @@ export default function Restaurant() {
       
       // Clear cart and move to next guest
       setCart([]);
+      console.log('🧹 Cart cleared after successful order');
       if (currentGuest < totalGuests) {
         setCurrentGuest(currentGuest + 1);
+        console.log('👤 Moved to next guest:', currentGuest + 1);
       }
       
     } catch (error) {
@@ -504,8 +551,13 @@ export default function Restaurant() {
             {menuItems.map((item) => (
               <TouchableOpacity 
                 key={item.id}
-                style={[styles.menuCategory, { backgroundColor: getCategoryColor(item.category) }]}
+                style={[
+                  styles.menuCategory, 
+                  { backgroundColor: getCategoryColor(item.category) },
+                  loading && styles.menuCategoryDisabled
+                ]}
                 onPress={() => addToCart(item)}
+                disabled={loading}
               >
                 <Text style={styles.menuCategoryIcon}>{getCategoryIcon(item.category)}</Text>
                 <Text style={styles.menuCategoryText}>{item.name.toUpperCase()}</Text>
@@ -514,10 +566,17 @@ export default function Restaurant() {
             ))}
             
             {/* Show message if no menu items */}
-            {menuItems.length === 0 && (
+            {!loading && menuItems.length === 0 && (
               <View style={styles.noMenuItems}>
                 <Text style={styles.noMenuItemsText}>No menu items available</Text>
                 <Text style={styles.noMenuItemsSubtext}>Add items in Menu Management</Text>
+              </View>
+            )}
+            
+            {/* Loading state */}
+            {loading && (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Loading menu items...</Text>
               </View>
             )}
           </View>
@@ -526,38 +585,6 @@ export default function Restaurant() {
     </SafeAreaView>
   );
 }
-
-const getCategoryIcon = (category: MenuItem['category']) => {
-  switch (category) {
-    case 'appetizer': return '🥗';
-    case 'main_course': return '🍽️';
-    case 'dessert': return '🍰';
-    case 'beverage': return '🥤';
-    case 'wine': return '🍷';
-    case 'beer': return '🍺';
-    case 'cocktail': return '🍹';
-    case 'coffee': return '☕';
-    case 'tea': return '🍵';
-    case 'juice': return '🧃';
-    default: return '🍴';
-  }
-};
-
-const getCategoryColor = (category: MenuItem['category']) => {
-  switch (category) {
-    case 'appetizer': return '#e74c3c';
-    case 'main_course': return '#c0392b';
-    case 'dessert': return '#f39c12';
-    case 'beverage': return '#3498db';
-    case 'wine': return '#8B0000';
-    case 'beer': return '#D2691E';
-    case 'cocktail': return '#DC143C';
-    case 'coffee': return '#8B4513';
-    case 'tea': return '#228B22';
-    case 'juice': return '#FF8C00';
-    default: return '#95a5a6';
-  }
-};
 
 const styles = StyleSheet.create({
   container: {
@@ -856,10 +883,10 @@ const styles = StyleSheet.create({
   menuGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 16,
   },
   menuCategory: {
-    width: (width - 350 - 60) / 3,
+    width: Math.floor((width - 350 - 80) / 3),
     height: 140,
     borderRadius: 8,
     justifyContent: 'center',
@@ -869,6 +896,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 4,
+  },
+  menuCategoryDisabled: {
+    opacity: 0.5,
   },
   menuCategoryIcon: {
     fontSize: 24,
@@ -909,5 +939,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#95a5a6',
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: '#bdc3c7',
   },
 });
