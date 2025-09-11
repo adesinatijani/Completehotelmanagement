@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -238,18 +239,10 @@ export default function Restaurant() {
       
       console.log('💰 Order totals calculated:', totals);
       
-      // Create order items
-      const orderItems = cart.map(item => ({
-        menu_item_id: item.menuItem.id,
-        quantity: item.quantity,
-        unit_price: item.menuItem.price,
-        special_instructions: item.specialInstructions || '',
-      }));
-
       // Generate order number
       const orderNumber = `R-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       
-      console.log('📋 Creating pending order:', orderNumber, 'with', orderItems.length, 'items');
+      console.log('📋 Creating pending order:', orderNumber, 'with', cart.length, 'items');
       
       Alert.alert(
         'Order Created!', 
@@ -464,6 +457,17 @@ export default function Restaurant() {
     );
   }, [cart, calculateTotals, formatCurrency]);
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3498db" />
+          <Text style={styles.loadingText}>Loading Restaurant POS...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -669,12 +673,6 @@ export default function Restaurant() {
                   <Text style={styles.noMenuItemsSubtext}>Add items in Menu Management</Text>
                 </View>
               )}
-              
-              {loading && (
-                <View style={styles.loadingContainer}>
-                  <Text style={styles.loadingText}>Loading menu categories...</Text>
-                </View>
-              )}
             </View>
           ) : (
             <View style={styles.itemsView}>
@@ -724,6 +722,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#2c3e50',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#2c3e50',
+  },
+  loadingText: {
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: 'white',
+    marginTop: 16,
   },
   header: {
     flexDirection: 'row',
@@ -1158,16 +1168,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#95a5a6',
     textAlign: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  loadingText: {
-    fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
-    color: '#bdc3c7',
   },
 });
