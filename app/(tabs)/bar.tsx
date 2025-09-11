@@ -125,7 +125,56 @@ export default function Bar() {
       categoryMap.get(item.category)!.push(item);
     });
 
-    const generatedCategories: MenuCategory[] = [
+    // Complete drink category configurations
+    const allDrinkCategoryConfigs = [
+      { key: 'beer', name: 'BEER BASKET', color: '#d4a574', icon: '🍺' },
+      { key: 'wine', name: 'WINE SELECTION', color: '#8b0000', icon: '🍷' },
+      { key: 'cocktail', name: 'COCKTAILS', color: '#dc143c', icon: '🍹' },
+      { key: 'spirits', name: 'PREMIUM SPIRITS', color: '#4169e1', icon: '🥃' },
+      { key: 'coffee', name: 'COFFEE BAR', color: '#8b4513', icon: '☕' },
+      { key: 'tea', name: 'TEA SELECTION', color: '#228b22', icon: '🍵' },
+      { key: 'juice', name: 'FRESH JUICES', color: '#ff8c00', icon: '🧃' },
+      { key: 'water', name: 'WATER & SODAS', color: '#4682b4', icon: '💧' },
+      { key: 'beverage', name: 'OTHER DRINKS', color: '#228b22', icon: '🥤' },
+    ];
+
+    const generatedCategories: MenuCategory[] = allDrinkCategoryConfigs
+      .map(config => ({
+        id: config.key,
+        name: config.name,
+        color: config.color,
+        icon: config.icon,
+        items: categoryMap.get(config.key) || [],
+        count: (categoryMap.get(config.key) || []).length
+      }))
+      .filter(category => category.count > 0);
+
+    // Add special drink categories
+    const shotItems = menuItems.filter(item => 
+      item.name.toLowerCase().includes('shot') || 
+      item.subcategory?.toLowerCase().includes('shot') ||
+      item.name.toLowerCase().includes('shooter')
+    );
+    
+    if (shotItems.length > 0) {
+      generatedCategories.push({
+        id: 'shots',
+        name: 'COCKTAIL SHOTS',
+        color: '#dc143c',
+        icon: '🥃',
+        items: shotItems,
+        count: shotItems.length
+      });
+    }
+
+    const premiumItems = menuItems.filter(item => 
+      item.name.toLowerCase().includes('premium') || 
+      item.name.toLowerCase().includes('top shelf') ||
+      item.subcategory?.toLowerCase().includes('premium')
+    );
+    
+    if (premiumItems.length > 0) {
+      generatedCategories.push({
       {
         id: 'beer',
         name: 'BEER BASKET',
@@ -166,8 +215,19 @@ export default function Bar() {
         items: [...(categoryMap.get('beverage') || []), ...(categoryMap.get('coffee') || []), ...(categoryMap.get('tea') || []), ...(categoryMap.get('juice') || []), ...(categoryMap.get('water') || [])],
         count: (categoryMap.get('beverage') || []).length + (categoryMap.get('coffee') || []).length + (categoryMap.get('tea') || []).length + (categoryMap.get('juice') || []).length + (categoryMap.get('water') || []).length
       }
-    ].filter(category => category.count > 0);
+        id: 'premium',
+        name: 'PREMIUM SELECTION',
+        color: '#ffd700',
+        icon: '👑',
+        items: premiumItems,
+        count: premiumItems.length
+      });
+    }
 
+    console.log('🍷 BAR CATEGORIES GENERATED:', generatedCategories.length);
+    generatedCategories.forEach(cat => {
+      console.log(`  - ${cat.name}: ${cat.count} items`);
+    });
     setCategories(generatedCategories);
     if (generatedCategories.length > 0 && !selectedCategory) {
       setSelectedCategory(generatedCategories[0]);

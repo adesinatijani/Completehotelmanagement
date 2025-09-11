@@ -138,8 +138,8 @@ export default function Restaurant() {
       categoryMap.get(item.category)!.push(item);
     });
 
-    // Generate all food categories dynamically
-    const foodCategoryConfigs = [
+    // Complete food category configurations
+    const allFoodCategoryConfigs = [
       { key: 'appetizer', name: 'APPETIZERS', color: '#ff6b6b', icon: '🥗' },
       { key: 'main_course', name: 'MAIN COURSE', color: '#4ecdc4', icon: '🍽️' },
       { key: 'dessert', name: 'DESSERTS', color: '#a8e6cf', icon: '🍰' },
@@ -148,9 +148,17 @@ export default function Restaurant() {
       { key: 'tea', name: 'TEA', color: '#228b22', icon: '🍵' },
       { key: 'juice', name: 'JUICES', color: '#ff8c00', icon: '🧃' },
       { key: 'water', name: 'WATER', color: '#4682b4', icon: '💧' },
+      { key: 'soup', name: 'SOUPS', color: '#ff7f50', icon: '🍲' },
+      { key: 'sandwich', name: 'SANDWICHES', color: '#daa520', icon: '🥪' },
+      { key: 'pasta', name: 'PASTA', color: '#ff6347', icon: '🍝' },
+      { key: 'pizza', name: 'PIZZA', color: '#ff4500', icon: '🍕' },
+      { key: 'seafood', name: 'SEAFOOD', color: '#20b2aa', icon: '🐟' },
+      { key: 'meat', name: 'MEAT DISHES', color: '#cd5c5c', icon: '🥩' },
+      { key: 'vegetarian', name: 'VEGETARIAN', color: '#32cd32', icon: '🥕' },
+      { key: 'healthy', name: 'HEALTHY OPTIONS', color: '#90ee90', icon: '🥗' },
     ];
 
-    const generatedCategories: MenuCategory[] = foodCategoryConfigs
+    const generatedCategories: MenuCategory[] = allFoodCategoryConfigs
       .map(config => ({
         id: config.key,
         name: config.name,
@@ -195,6 +203,10 @@ export default function Restaurant() {
       });
     }
 
+    console.log('🍽️ RESTAURANT CATEGORIES GENERATED:', generatedCategories.length);
+    generatedCategories.forEach(cat => {
+      console.log(`  - ${cat.name}: ${cat.count} items`);
+    });
     setCategories(generatedCategories);
     if (generatedCategories.length > 0 && !selectedCategory) {
       setSelectedCategory(generatedCategories[0]);

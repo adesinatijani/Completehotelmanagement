@@ -455,7 +455,7 @@ export default function MenuManagement() {
                   <Text style={[styles.availabilityText, {
                     color: item.is_available ? '#16a34a' : '#ef4444'
                   }]}>
-                    {item.is_available ? 'Available' : 'Unavailable'}
+                    {item.is_available ? '✅ Available' : '❌ Unavailable'}
                   </Text>
                 </View>
               </View>
