@@ -28,7 +28,9 @@ class AudioManager {
       // Create button click sounds
       await this.createButtonSounds();
     } catch (error) {
-      console.warn('Audio initialization failed:', error);
+      console.warn('Audio initialization failed (non-critical):', error);
+      // Set audio as disabled if initialization fails
+      this.isEnabled = false;
     }
   }
 
@@ -87,15 +89,21 @@ class AudioManager {
   }
 
   async playSound(soundType: 'buttonClick' | 'addToCart' | 'orderComplete' | 'error') {
-    if (!this.isEnabled) return;
+    if (!this.isEnabled) {
+      console.log('Audio disabled, skipping sound:', soundType);
+      return;
+    }
 
     try {
       const sound = this.sounds[soundType];
       if (sound) {
         await sound.playAsync();
+      } else {
+        console.warn('Sound not found:', soundType);
       }
     } catch (error) {
-      console.warn('Failed to play sound:', error);
+      console.warn('Failed to play sound (non-critical):', soundType, error);
+      // Don't throw error, just log it
     }
   }
 

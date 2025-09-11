@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { db } from '@/lib/database';
-import { saveHotelSettings, loadHotelSettings } from '@/lib/storage';
+import { loadHotelSettings } from '@/lib/storage';
 import { Database } from '@/types/database';
 import { Wine, Search, User, Trash2, CreditCard, DollarSign, Clock, Receipt, Settings, Martini, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, Loader } from 'lucide-react-native';
 import { audioManager } from '@/lib/audio';
@@ -74,11 +74,13 @@ export default function Bar() {
       setLoading(true);
       setError(null);
       
-      await Promise.all([
-        loadData(),
-        loadSettings(),
-        initializeAudio(),
-      ]);
+      // Initialize database first
+      await db.initialize();
+      
+      // Then load other data
+      await loadData();
+      await loadSettings();
+      await initializeAudio();
     } catch (error) {
       console.error('Component initialization failed:', error);
       setError('Failed to initialize bar POS. Please refresh the page.');
@@ -117,9 +119,6 @@ export default function Bar() {
 
   const loadData = async () => {
     try {
-      // Initialize database first
-      await db.initialize();
-      
       const [menuData, ordersData] = await Promise.all([
         db.select<MenuItem>('menu_items'),
         db.select<Order>('orders')
@@ -306,6 +305,11 @@ export default function Bar() {
   const calculateTotal = useCallback(() => {
     try {
       const subtotal = cart.reduce((sum, item) => {
+        // Validate each item before calculation
+        if (!item.menuItem || item.menuItem.price < 0 || item.quantity < 0) {
+          console.warn('Invalid cart item detected:', item);
+          return sum;
+        }
         const itemTotal = item.menuItem.price * item.quantity;
         return sum + itemTotal;
       }, 0);
@@ -315,8 +319,9 @@ export default function Bar() {
         return { subtotal: 0, tax: 0, serviceCharge: 0, total: 0 };
       }
       
-      const taxRate = (hotelSettings?.taxRate || 8.5) / 100;
-      const serviceChargeRate = (hotelSettings?.serviceChargeRate || 0) / 100;
+      // Validate tax rates
+      const taxRate = Math.max(0, Math.min(50, hotelSettings?.taxRate || 8.5)) / 100; // 0-50% max
+      const serviceChargeRate = Math.max(0, Math.min(30, hotelSettings?.serviceChargeRate || 0)) / 100; // 0-30% max
       
       const tax = Math.round(subtotal * taxRate * 100) / 100; // Proper rounding
       const serviceCharge = Math.round(subtotal * serviceChargeRate * 100) / 100;
@@ -325,18 +330,22 @@ export default function Bar() {
       return { subtotal, tax, serviceCharge, total };
     } catch (error) {
       console.error('Error calculating total:', error);
+      setError('Failed to calculate order total. Please refresh and try again.');
       return { subtotal: 0, tax: 0, serviceCharge: 0, total: 0 };
     }
   }, [cart, hotelSettings]);
 
   const generateUniqueOrderNumber = (): string => {
+    // More robust unique ID generation
     const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `B-${timestamp}-${random}`;
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    const counter = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+    return `B-${timestamp}-${random}-${counter}`;
   };
 
   const createOrder = async (paymentMethod: string, paymentStatus: 'pending' | 'paid' = 'paid') => {
     try {
+      // Validate cart before creating order
       if (!validateCart()) {
         return null;
       }
@@ -345,6 +354,12 @@ export default function Bar() {
       
       if (total <= 0) {
         setError('Invalid order total. Please check your items.');
+        return null;
+      }
+      
+      // Validate payment amount
+      if (total > MAX_ORDER_VALUE) {
+        setError(`Order value exceeds maximum limit of ${formatCurrency(MAX_ORDER_VALUE)}`);
         return null;
       }
       
@@ -374,17 +389,22 @@ export default function Bar() {
       const newOrder = await db.insert<Order>('orders', orderData);
       
       // Create financial transaction
-      await db.insert('transactions', {
-        transaction_number: `TXN-${orderNumber}`,
-        type: 'income',
-        category: 'food_beverage',
-        amount: total,
-        description: `Bar order - ${paymentMethod}`,
-        reference_id: newOrder.id,
-        payment_method: paymentMethod.toLowerCase().replace(' ', '_'),
-        transaction_date: new Date().toISOString().split('T')[0],
-        processed_by: 'bar_pos',
-      });
+      try {
+        await db.insert('transactions', {
+          transaction_number: `TXN-${orderNumber}`,
+          type: 'income',
+          category: 'food_beverage',
+          amount: total,
+          description: `Bar order - ${paymentMethod}`,
+          reference_id: newOrder.id,
+          payment_method: paymentMethod.toLowerCase().replace(' ', '_'),
+          transaction_date: new Date().toISOString().split('T')[0],
+          processed_by: 'bar_pos',
+        });
+      } catch (transactionError) {
+        console.warn('Failed to create transaction record:', transactionError);
+        // Continue with order creation even if transaction fails
+      }
 
       setLastOrderId(newOrder.id);
       return newOrder;
@@ -396,6 +416,7 @@ export default function Bar() {
   };
 
   const completePayment = async (paymentMethod: string) => {
+    // Prevent multiple simultaneous operations
     if (isProcessing) {
       Alert.alert('Please Wait', 'Another operation is in progress...');
       return;
@@ -405,8 +426,15 @@ export default function Bar() {
       setIsProcessing(true);
       setError(null);
       
+      // Validate cart one more time before payment
+      if (!validateCart()) {
+        setIsProcessing(false);
+        return;
+      }
+      
       const order = await createOrder(paymentMethod, 'paid');
       if (!order) {
+        setIsProcessing(false);
         return; // Error already set in createOrder
       }
 
@@ -477,8 +505,15 @@ export default function Bar() {
       setIsProcessing(true);
       setError(null);
       
+      // Validate cart before placing order
+      if (!validateCart()) {
+        setIsProcessing(false);
+        return;
+      }
+      
       const order = await createOrder('Pending Payment', 'pending');
       if (!order) {
+        setIsProcessing(false);
         return;
       }
 
@@ -550,6 +585,8 @@ export default function Bar() {
   };
 
   const handleRoomCharge = () => {
+    if (!validateCart()) return;
+    
     const { total } = calculateTotal();
     Alert.prompt(
       'Room Charge 🏨',
@@ -559,10 +596,11 @@ export default function Bar() {
         { 
           text: 'Charge Room', 
           onPress: (roomNumber) => {
-            if (roomNumber && roomNumber.trim() && /^\d+$/.test(roomNumber.trim())) {
+            const trimmedRoom = roomNumber?.trim() || '';
+            if (trimmedRoom && /^[a-zA-Z0-9]+$/.test(trimmedRoom)) {
               completePayment(`Room ${roomNumber.trim()} Charge`);
             } else {
-              Alert.alert('Invalid Room Number', 'Please enter a valid numeric room number (e.g., 101, 205)');
+              Alert.alert('Invalid Room Number', 'Please enter a valid room number (e.g., 101, 205, A12)');
             }
           }
         }
@@ -603,6 +641,8 @@ export default function Bar() {
   };
 
   const handleEvenSplit = () => {
+    if (!validateCart()) return;
+    
     Alert.prompt(
       'Split Evenly 👥',
       'How many people will split this bill?',
@@ -614,7 +654,7 @@ export default function Bar() {
             const ways = parseInt(value || '2');
             if (ways >= 2 && ways <= 10) {
               const { total } = calculateTotal();
-              const amountPerPerson = Math.round((total / ways) * 100) / 100;
+              const amountPerPerson = Math.round((total / ways) * 100) / 100; // Proper rounding
               Alert.alert(
                 'Split Bill Calculation 🧮',
                 `${formatCurrency(total)} ÷ ${ways} people = ${formatCurrency(amountPerPerson)} per person\n\nProceed with split payment?`,
@@ -660,15 +700,14 @@ export default function Bar() {
   const clearCart = useCallback(() => {
     try {
       setError(null);
-      audioManager.playSound('buttonClick').catch(() => {});
       
       if (cart.length === 0) {
-        Alert.alert('Cart Empty', 'Cart is already empty.');
+        setError('Cart is already empty.');
         return;
       }
       
+      audioManager.playSound('buttonClick').catch(() => {});
       setCart([]);
-      Alert.alert('Cart Cleared ✅', 'All drinks removed from cart.');
     } catch (error) {
       console.error('Error clearing cart:', error);
       setError('Failed to clear cart.');

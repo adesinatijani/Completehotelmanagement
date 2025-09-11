@@ -69,16 +69,26 @@ export class CurrencyManager {
       ? SUPPORTED_CURRENCIES.find(c => c.code === currencyCode) || this.currentCurrency
       : this.currentCurrency;
 
+    // Validate amount
+    if (!Number.isFinite(amount)) {
+      console.warn('Invalid amount for formatting:', amount);
+      return `${currency.symbol}0.00`;
+    }
+
+    // Ensure amount is not negative for display
+    const safeAmount = Math.max(0, amount);
+
     try {
       return new Intl.NumberFormat(currency.locale, {
         style: 'currency',
         currency: currency.code,
         minimumFractionDigits: currency.decimals,
         maximumFractionDigits: currency.decimals,
-      }).format(amount);
+      }).format(safeAmount);
     } catch (error) {
+      console.warn('Currency formatting failed:', error);
       // Fallback formatting
-      return `${currency.symbol}${amount.toFixed(currency.decimals)}`;
+      return `${currency.symbol}${safeAmount.toFixed(currency.decimals)}`;
     }
   }
 

@@ -41,9 +41,15 @@ export class LocalDatabase {
       console.log('=== DATABASE INITIALIZATION COMPLETE ===');
     } catch (error) {
       console.error('❌ Failed to initialize database:', error);
-      await this.createDefaultSchema();
-      this.initialized = true;
-      console.log('✅ Fallback database created');
+      // Try to create fallback database
+      try {
+        await this.createDefaultSchema();
+        this.initialized = true;
+        console.log('✅ Fallback database created');
+      } catch (fallbackError) {
+        console.error('❌ Failed to create fallback database:', fallbackError);
+        throw new Error('Database initialization failed completely');
+      }
     }
   }
 
@@ -509,7 +515,13 @@ export class LocalDatabase {
 
   // Generic CRUD operations
   async select<T>(table: string, filters?: any): Promise<T[]> {
-    await this.initialize();
+    try {
+      await this.initialize();
+    } catch (error) {
+      console.error('Database not initialized for select:', error);
+      throw new Error('Database not available. Please refresh the page.');
+    }
+    
     let results = this.data[table] || [];
     
     if (filters) {
@@ -532,10 +544,20 @@ export class LocalDatabase {
   }
 
   async insert<T>(table: string, data: Omit<T, 'id' | 'created_at' | 'updated_at'>): Promise<T> {
-    await this.initialize();
+    try {
+      await this.initialize();
+    } catch (error) {
+      console.error('Database not initialized for insert:', error);
+      throw new Error('Database not available. Please refresh the page.');
+    }
     
     console.log(`📝 INSERTING INTO ${table.toUpperCase()}:`);
     console.log('Data to insert:', JSON.stringify(data, null, 2));
+    
+    // Validate data before insertion
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid data provided for insertion');
+    }
     
     const newItem = {
       ...data,
@@ -569,16 +591,26 @@ export class LocalDatabase {
   }
 
   async update<T>(table: string, id: string, updates: Partial<T>): Promise<T | null> {
-    await this.initialize();
+    try {
+      await this.initialize();
+    } catch (error) {
+      console.error('Database not initialized for update:', error);
+      throw new Error('Database not available. Please refresh the page.');
+    }
     
     console.log(`Updating ${table} item ${id}:`, updates);
+    
+    // Validate inputs
+    if (!id || !updates || typeof updates !== 'object') {
+      throw new Error('Invalid parameters for update operation');
+    }
     
     const items = this.data[table] || [];
     const index = items.findIndex(item => item.id === id);
     
     if (index === -1) {
       console.error(`Item with ID ${id} not found in table ${table}`);
-      return null;
+      throw new Error(`Item not found in ${table}`);
     }
     
     const updatedItem = {
@@ -597,12 +629,24 @@ export class LocalDatabase {
   }
 
   async delete(table: string, id: string): Promise<boolean> {
-    await this.initialize();
+    try {
+      await this.initialize();
+    } catch (error) {
+      console.error('Database not initialized for delete:', error);
+      throw new Error('Database not available. Please refresh the page.');
+    }
+    
+    // Validate inputs
+    if (!id) {
+      throw new Error('ID is required for delete operation');
+    }
     
     const items = this.data[table] || [];
     const index = items.findIndex(item => item.id === id);
     
-    if (index === -1) return false;
+    if (index === -1) {
+      throw new Error(`Item with ID ${id} not found in ${table}`);
+    }
     
     this.data[table].splice(index, 1);
     await this.save();
