@@ -559,13 +559,9 @@ export default function Bar() {
 
           {/* Order Total */}
           <View style={styles.orderTotal}>
-            <Text style={styles.totalAmount}>{formatCurrency(calculateTotals.total)}</Text>
             <Text style={styles.taxAmount}>TAX {formatCurrency(calculateTotals.tax)}</Text>
           </View>
 }
-            <Text style={styles.totalAmount}>{formatCurrency(calculateTotals.total)}</Text>
-            <Text style={styles.taxAmount}>TAX {formatCurrency(calculateTotals.tax)}</Text>
-          </View>
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
