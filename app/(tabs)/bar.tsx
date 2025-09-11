@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { db } from '@/lib/database';
+import { saveHotelSettings } from '@/lib/storage';
 import { Database } from '@/types/database';
 import { 
   Wine, 
@@ -31,6 +32,7 @@ import { playButtonClick, playAddToCart, playOrderComplete } from '@/lib/audio';
 import { currencyManager } from '@/lib/currency';
 import { receiptPrinter } from '@/lib/printer';
 import { loadHotelSettings } from '@/lib/storage';
+import { audioManager } from '@/lib/audio';
 
 type MenuItem = Database['public']['Tables']['menu_items']['Row'];
 type Order = Database['public']['Tables']['orders']['Row'];
@@ -65,11 +67,21 @@ export default function Bar() {
   const [hotelSettings, setHotelSettings] = useState<any>(null);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     loadData();
     loadSettings();
+    initializeAudio();
   }, []);
+
+  const initializeAudio = async () => {
+    try {
+      await audioManager.initialize();
+    } catch (error) {
+      console.warn('Audio initialization failed:', error);
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -144,6 +156,12 @@ export default function Bar() {
   ];
 
   const addToCart = (menuItem: MenuItem) => {
+    // Validate menu item
+    if (!menuItem || !menuItem.id || menuItem.price < 0) {
+      Alert.alert('Error', 'Invalid menu item');
+      return;
+    }
+
     playAddToCart();
     const existingItem = cart.find(item => item.menuItem.id === menuItem.id);
     if (existingItem) {
@@ -162,6 +180,17 @@ export default function Bar() {
   };
 
   const updateQuantity = (menuItemId: string, quantity: number) => {
+    // Validate quantity
+    if (quantity < 0) {
+      Alert.alert('Error', 'Quantity cannot be negative');
+      return;
+    }
+    
+    if (quantity > 99) {
+      Alert.alert('Error', 'Maximum quantity is 99');
+      return;
+    }
+
     if (quantity <= 0) {
       removeFromCart(menuItemId);
     } else {
@@ -175,6 +204,13 @@ export default function Bar() {
 
   const calculateTotal = () => {
     const subtotal = cart.reduce((sum, item) => sum + (item.menuItem.price * item.quantity), 0);
+    
+    // Validate subtotal
+    if (subtotal < 0) {
+      console.warn('Negative subtotal detected:', subtotal);
+      return { subtotal: 0, tax: 0, serviceCharge: 0, total: 0 };
+    }
+    
     const taxRate = (hotelSettings?.taxRate || 8.5) / 100;
     const serviceChargeRate = (hotelSettings?.serviceChargeRate || 0) / 100;
     const tax = subtotal * taxRate;
@@ -189,9 +225,22 @@ export default function Bar() {
       return;
     }
 
+    if (isProcessing) {
+      Alert.alert('Please Wait', 'Order is being processed...');
+      return;
+    }
+
     try {
+      setIsProcessing(true);
       playButtonClick();
       const { subtotal, tax, total } = calculateTotal();
+      
+      // Validate totals
+      if (subtotal <= 0) {
+        Alert.alert('Error', 'Invalid order total');
+        return;
+      }
+      
       const serviceCharge = subtotal * ((hotelSettings?.serviceChargeRate || 0) / 100);
       const finalTotal = subtotal + tax + serviceCharge;
       
@@ -219,13 +268,33 @@ export default function Bar() {
       Alert.alert('Success', 'Order sent to bar! Please select payment method.');
     } catch (error) {
       console.error('Error placing order:', error);
-      Alert.alert('Error', 'Failed to place order');
+      Alert.alert('Error', `Failed to place order: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const completePayment = async (paymentMethod: string) => {
+    if (cart.length === 0) {
+      Alert.alert('Error', 'No items to process');
+      return;
+    }
+
+    if (isProcessing) {
+      Alert.alert('Please Wait', 'Payment is being processed...');
+      return;
+    }
+
     try {
+      setIsProcessing(true);
       const { subtotal, tax, total } = calculateTotal();
+      
+      // Validate payment amount
+      if (total <= 0) {
+        Alert.alert('Error', 'Invalid payment amount');
+        return;
+      }
+      
       const serviceCharge = subtotal * ((hotelSettings?.serviceChargeRate || 0) / 100);
       const finalTotal = subtotal + tax + serviceCharge;
       
@@ -237,7 +306,7 @@ export default function Bar() {
       }));
 
       const orderNumber = `B-${Date.now()}`;
-      await db.insert<Order>('orders', {
+      const newOrder = await db.insert<Order>('orders', {
         order_number: orderNumber,
         table_number: tableNumber || 'Bar Service',
         order_type: 'bar',
@@ -252,7 +321,11 @@ export default function Bar() {
 
       playOrderComplete();
       
-      Alert.alert('Success', `Order completed with ${paymentMethod} payment`);
+      Alert.alert(
+        'Payment Successful', 
+        `Order #${orderNumber} completed\nPayment: ${paymentMethod}\nTotal: ${formatCurrency(finalTotal)}`,
+        [{ text: 'OK' }]
+      );
       
       // Clear cart and reset state
       setCart([]);
@@ -260,13 +333,24 @@ export default function Bar() {
       loadData();
     } catch (error) {
       console.error('Error completing payment:', error);
-      Alert.alert('Error', 'Failed to process payment');
+      Alert.alert(
+        'Payment Failed', 
+        `Failed to process ${paymentMethod} payment: ${error.message || 'Unknown error'}`,
+        [
+          { text: 'Retry', onPress: () => completePayment(paymentMethod) },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+    } finally {
+      setIsProcessing(false);
     }
   };
   const handleNoReceipt = () => {
+    if (cart.length === 0) return;
+    
     Alert.alert(
       'Complete Order',
-      'Process order without printing receipt?',
+      `Process order for ${formatCurrency(calculateTotal().total)} without printing receipt?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Complete', onPress: () => completePayment('No Receipt') }
@@ -275,9 +359,12 @@ export default function Bar() {
   };
 
   const handlePlaceOrder = async () => {
+    if (cart.length === 0) return;
+    
+    const { total } = calculateTotal();
     Alert.alert(
       'Send to Bar',
-      'Send this order to the bar for preparation?',
+      `Send order for ${formatCurrency(total)} to bar for preparation?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Send Order', onPress: () => placeOrder() }
@@ -286,6 +373,8 @@ export default function Bar() {
   };
 
   const handleCashPayment = () => {
+    if (cart.length === 0) return;
+    
     const { total } = calculateTotal();
     Alert.alert(
       'Cash Payment',
@@ -298,6 +387,8 @@ export default function Bar() {
   };
 
   const handleCreditPayment = () => {
+    if (cart.length === 0) return;
+    
     const { total } = calculateTotal();
     Alert.alert(
       'Credit Card Payment',
@@ -326,39 +417,46 @@ export default function Bar() {
   const clearCart = () => {
     playButtonClick();
     if (cart.length === 0) {
-      Alert.alert('Info', 'Cart is already empty');
       return;
     }
     
     setCart([]);
-    Alert.alert('Success', 'Cart cleared');
   };
 
   const handleRoomCharge = async () => {
-    Alert.alert(
+    const { total } = calculateTotal();
+    Alert.prompt(
       'Room Charge',
-      'Which room should be charged?',
+      `Charge ${formatCurrency(total)} to which room number?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Charge Room', 
-          onPress: () => completePayment('Room Charge')
+          onPress: (roomNumber) => {
+            if (roomNumber && roomNumber.trim()) {
+              completePayment(`Room ${roomNumber.trim()} Charge`);
+            } else {
+              Alert.alert('Error', 'Please enter a valid room number');
+            }
+          }
         }
-      ]
+      ],
+      'plain-text',
+      '',
+      'numeric'
     );
   };
 
   const handleComplimentary = async () => {
+    const { total } = calculateTotal();
     Alert.alert(
       'Complimentary Order',
-      'Mark this order as complimentary (free)?',
+      `Mark order for ${formatCurrency(total)} as complimentary (free)?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Confirm', 
-          onPress: async () => {
-            completePayment('Complimentary');
-          }
+          onPress: () => completePayment('Complimentary')
         }
       ]
     );
@@ -393,8 +491,13 @@ export default function Bar() {
               Alert.alert(
                 'Split Bill Result',
                 `${formatCurrency(total)} split ${ways} ways = ${formatCurrency(amountPerPerson)} per person`,
-                [{ text: 'Process', onPress: () => completePayment(`Split ${ways} ways`) }]
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Process', onPress: () => completePayment(`Split ${ways} ways`) }
+                ]
               );
+            } else {
+              Alert.alert('Error', 'Must split between at least 2 people');
             }
           }
         }
@@ -612,7 +715,7 @@ export default function Bar() {
                   style={[styles.actionButton, { backgroundColor: '#95a5a6' }]}
                   onPress={cart.length > 0 ? handleNoReceipt : undefined}
                   disabled={cart.length === 0}
-                  activeOpacity={0.7}
+                  activeOpacity={cart.length > 0 ? 0.7 : 1}
                 >
                   <Receipt size={16} color="#fff" />
                   <Text style={styles.actionButtonText}>NO RECEIPT</Text>
@@ -622,7 +725,7 @@ export default function Bar() {
                   style={[styles.actionButton, { backgroundColor: '#f39c12' }]}
                   onPress={cart.length > 0 ? clearCart : undefined}
                   disabled={cart.length === 0}
-                  activeOpacity={0.7}
+                  activeOpacity={cart.length > 0 ? 0.7 : 1}
                 >
                   <Trash2 size={16} color="#fff" />
                   <Text style={styles.actionButtonText}>CLEAR</Text>
@@ -631,44 +734,65 @@ export default function Bar() {
                 <TouchableOpacity 
                   style={[
                     styles.actionButton, 
-                    { backgroundColor: cart.length > 0 ? '#27ae60' : '#95a5a6' }
+                    { 
+                      backgroundColor: cart.length > 0 && !isProcessing ? '#27ae60' : '#95a5a6',
+                      opacity: isProcessing ? 0.6 : 1
+                    }
                   ]}
-                  onPress={cart.length > 0 ? handlePlaceOrder : undefined}
-                  disabled={cart.length === 0}
-                  activeOpacity={0.7}
+                  onPress={cart.length > 0 && !isProcessing ? handlePlaceOrder : undefined}
+                  disabled={cart.length === 0 || isProcessing}
+                  activeOpacity={cart.length > 0 && !isProcessing ? 0.7 : 1}
                 >
                   <Text style={styles.actionButtonText}>
-                    ORDER
+                    {isProcessing ? 'PROCESSING...' : 'ORDER'}
                   </Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.bottomButtons}>
                 <TouchableOpacity 
-                  style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
-                  onPress={cart.length > 0 ? handleCashPayment : undefined}
-                  disabled={cart.length === 0}
-                  activeOpacity={0.7}
+                  style={[
+                    styles.paymentButton, 
+                    { 
+                      backgroundColor: cart.length > 0 && !isProcessing ? '#2c3e50' : '#95a5a6',
+                      opacity: isProcessing ? 0.6 : 1
+                    }
+                  ]}
+                  onPress={cart.length > 0 && !isProcessing ? handleCashPayment : undefined}
+                  disabled={cart.length === 0 || isProcessing}
+                  activeOpacity={cart.length > 0 && !isProcessing ? 0.7 : 1}
                 >
                   <DollarSign size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>CASH</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity 
-                  style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
-                  onPress={cart.length > 0 ? handleCreditPayment : undefined}
-                  disabled={cart.length === 0}
-                  activeOpacity={0.7}
+                  style={[
+                    styles.paymentButton, 
+                    { 
+                      backgroundColor: cart.length > 0 && !isProcessing ? '#2c3e50' : '#95a5a6',
+                      opacity: isProcessing ? 0.6 : 1
+                    }
+                  ]}
+                  onPress={cart.length > 0 && !isProcessing ? handleCreditPayment : undefined}
+                  disabled={cart.length === 0 || isProcessing}
+                  activeOpacity={cart.length > 0 && !isProcessing ? 0.7 : 1}
                 >
                   <CreditCard size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>CREDIT</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity 
-                  style={[styles.paymentButton, { backgroundColor: '#2c3e50' }]}
-                  onPress={cart.length > 0 ? handleSettle : undefined}
-                  disabled={cart.length === 0}
-                  activeOpacity={0.7}
+                  style={[
+                    styles.paymentButton, 
+                    { 
+                      backgroundColor: cart.length > 0 && !isProcessing ? '#2c3e50' : '#95a5a6',
+                      opacity: isProcessing ? 0.6 : 1
+                    }
+                  ]}
+                  onPress={cart.length > 0 && !isProcessing ? handleSettle : undefined}
+                  disabled={cart.length === 0 || isProcessing}
+                  activeOpacity={cart.length > 0 && !isProcessing ? 0.7 : 1}
                 >
                   <Settings size={16} color="#fff" />
                   <Text style={styles.paymentButtonText}>SETTLE</Text>
