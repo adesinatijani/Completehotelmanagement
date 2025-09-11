@@ -78,7 +78,6 @@ export default function Bar() {
   const [receiptOption, setReceiptOption] = useState<'no_receipt' | 'print' | 'email'>('no_receipt');
   const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
   const [pendingOrder, setPendingOrder] = useState<any>(null);
-  const [savedOrders, setSavedOrders] = useState<CartItem[][]>([]);
 
   useEffect(() => {
     loadData();
