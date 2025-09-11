@@ -573,7 +573,6 @@ export default function Bar() {
                     </View>
                   </View>
                   </View>
-                </View>
               ))}
             </View>
           </ScrollView>
