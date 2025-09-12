@@ -108,7 +108,7 @@ export default function Accounting() {
         db.select<Order>('orders', { 
           filters: { payment_status: 'paid' }
         }),
-        db.select('transactions')
+        db.select('transactions', {})
       ]);
 
       // Calculate financial metrics

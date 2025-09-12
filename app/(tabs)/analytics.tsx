@@ -61,12 +61,12 @@ export default function Analytics() {
       
       // Get all data for analytics
       const [rooms, bookings, transactions, orders, maintenanceRequests, hallBookings] = await Promise.all([
-        db.select('rooms'),
-        db.select('bookings'),
-        db.select('transactions'),
-        db.select('orders'),
-        db.select('maintenance_requests'),
-        db.select('hall_bookings')
+        db.select('rooms', {}),
+        db.select('bookings', {}),
+        db.select('transactions', {}),
+        db.select('orders', {}),
+        db.select('maintenance_requests', {}),
+        db.select('hall_bookings', {})
       ]);
 
       // Calculate analytics

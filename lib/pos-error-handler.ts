@@ -153,7 +153,8 @@ export class POSErrorHandler {
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        return await operation();
+        const result = await operation();
+        return result;
       } catch (error) {
         lastError = error;
         

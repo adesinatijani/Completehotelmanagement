@@ -345,24 +345,27 @@ export default function Bar() {
       console.log('💾 Saving bar order to database with payment:', orderData);
       
       // Save order to database
-      const order = await db.insert('orders', orderData);
+      const [order] = await db.insert('orders', orderData);
       
       console.log('✅ Bar order saved and sent to bar:', order);
 
       // Create financial transaction for accounting
       try {
-        await db.insert('transactions', {
+        const [transaction] = await db.insert('transactions', {
           transaction_number: `TXN-${orderNumber}`,
           type: 'income',
           category: 'food_beverage',
           amount: totals.total,
           description: `Bar order - ${paymentMethod} payment`,
-          reference_id: order.id,
+          reference_id: order?.id || orderNumber,
           payment_method: paymentMethod.toLowerCase(),
           transaction_date: new Date().toISOString().split('T')[0],
           processed_by: user?.id || 'pos_system',
         });
-        console.log('✅ Financial transaction recorded for bar order');
+        
+        if (transaction) {
+          console.log('✅ Financial transaction recorded for bar order');
+        }
       } catch (transactionError) {
         console.warn('Failed to record financial transaction (non-critical):', transactionError);
       }

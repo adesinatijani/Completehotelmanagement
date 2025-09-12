@@ -146,16 +146,18 @@ export class POSOrderManager {
       };
 
       // Create order in database with retry mechanism
-      const newOrder = await posErrorHandler.retryOperation(
-        () => db.insert<Order>('orders', newOrderData),
+      const [newOrder] = await posErrorHandler.retryOperation(
+        () => db.insert('orders', newOrderData),
         3,
         1000
       );
 
       // Create financial transaction
-      await this.createFinancialTransaction(newOrder, orderData);
+      if (newOrder) {
+        await this.createFinancialTransaction(newOrder, orderData);
+      }
 
-      return newOrder;
+      return newOrder || newOrderData as Order;
     } catch (error) {
       throw posErrorHandler.handleError(error, {
         component: 'POSOrderManager',
@@ -172,17 +174,21 @@ export class POSOrderManager {
 
   private async createFinancialTransaction(order: Order, orderData: OrderCreationData) {
     try {
-      await db.insert('transactions', {
+      const [transaction] = await db.insert('transactions', {
         transaction_number: `TXN-${order.order_number}`,
         type: 'income',
         category: 'food_beverage',
         amount: order.total_amount,
         description: `${orderData.orderType} order - ${orderData.paymentMethod}`,
-        reference_id: order.id,
+        reference_id: order?.id || order.order_number,
         payment_method: orderData.paymentMethod.toLowerCase().replace(/\s+/g, '_'),
         transaction_date: new Date().toISOString().split('T')[0],
         processed_by: 'pos_system',
       });
+      
+      if (transaction) {
+        console.log('✅ Financial transaction created:', transaction.transaction_number);
+      }
     } catch (error) {
       console.warn('Failed to create financial transaction (non-critical):', error);
       // Don't throw error - order creation is more important than transaction logging
@@ -191,11 +197,15 @@ export class POSOrderManager {
 
   async updateOrderStatus(orderId: string, status: Order['status']): Promise<void> {
     try {
-      await posErrorHandler.retryOperation(
+      const [updatedOrder] = await posErrorHandler.retryOperation(
         () => db.update<Order>('orders', orderId, { status }),
         3,
         1000
       );
+      
+      if (updatedOrder) {
+        console.log('✅ Order status updated:', updatedOrder.order_number, 'to', status);
+      }
     } catch (error) {
       throw posErrorHandler.handleError(error, {
         component: 'POSOrderManager',
@@ -208,7 +218,7 @@ export class POSOrderManager {
 
   async cancelOrder(orderId: string, reason: string): Promise<void> {
     try {
-      await posErrorHandler.retryOperation(
+      const [cancelledOrder] = await posErrorHandler.retryOperation(
         () => db.update<Order>('orders', orderId, { 
           status: 'cancelled',
           special_instructions: `Cancelled: ${reason}`
@@ -218,18 +228,22 @@ export class POSOrderManager {
       );
 
       // Create refund transaction if order was paid
-      const order = await db.select<Order>('orders', { id: orderId });
-      if (order.length > 0 && order[0].payment_status === 'paid') {
-        await db.insert('transactions', {
-          transaction_number: `REF-${order[0].order_number}`,
+      const orders = await db.select<Order>('orders', { filters: { id: orderId } });
+      if (orders.length > 0 && orders[0].payment_status === 'paid') {
+        const [refundTransaction] = await db.insert('transactions', {
+          transaction_number: `REF-${orders[0].order_number}`,
           type: 'expense',
           category: 'refunds',
-          amount: order[0].total_amount,
+          amount: orders[0].total_amount,
           description: `Refund for cancelled order - ${reason}`,
           reference_id: orderId,
           transaction_date: new Date().toISOString().split('T')[0],
           processed_by: 'pos_system',
         });
+        
+        if (refundTransaction) {
+          console.log('✅ Refund transaction created:', refundTransaction.transaction_number);
+        }
       }
     } catch (error) {
       throw posErrorHandler.handleError(error, {

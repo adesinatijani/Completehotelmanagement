@@ -169,13 +169,15 @@ export default function Bookings() {
       await db.initialize();
       console.log('✅ Database initialized');
       
-      const createdBooking = await db.insert<Booking>('bookings', bookingData);
+      const [createdBooking] = await db.insert<Booking>('bookings', bookingData);
       
       console.log('✅ Booking created successfully:', createdBooking);
 
       // Update room status to reserved
       console.log('🏠 Updating room status to reserved...');
-      await db.update<Room>('rooms', newBooking.room_id, { status: 'reserved' });
+      if (createdBooking) {
+        await db.update<Room>('rooms', newBooking.room_id, { status: 'reserved' });
+      }
       
       console.log('✅ Room status updated to reserved');
       
@@ -231,7 +233,7 @@ export default function Bookings() {
       
       console.log('Updating booking status:', bookingId, status);
       
-      const updatedBooking = await db.update<Booking>('bookings', bookingId, { booking_status: status });
+      const [updatedBooking] = await db.update<Booking>('bookings', bookingId, { booking_status: status });
       
       console.log('Booking status updated:', updatedBooking);
       
@@ -255,12 +257,18 @@ export default function Bookings() {
         }
         
         console.log('Updating room status to:', roomStatus);
-        await db.update<Room>('rooms', booking.room_id, { status: roomStatus });
+        const [updatedRoom] = await db.update<Room>('rooms', booking.room_id, { status: roomStatus });
+        
+        if (updatedRoom) {
+          console.log('✅ Room status updated successfully');
+        }
       }
 
-      setBookings(bookings.map(booking => 
-        booking.id === bookingId ? { ...booking, booking_status: status } : booking
-      ));
+      if (updatedBooking) {
+        setBookings(bookings.map(booking => 
+          booking.id === bookingId ? { ...booking, booking_status: status } : booking
+        ));
+      }
 
       Alert.alert('Success', 'Booking status updated');
     } catch (error) {

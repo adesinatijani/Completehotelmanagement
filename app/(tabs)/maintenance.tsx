@@ -86,14 +86,16 @@ export default function Maintenance() {
     try {
       const requestNumber = `MR-${new Date().getFullYear()}-${String(requests.length + 1).padStart(3, '0')}`;
       
-      await db.insert<MaintenanceRequest>('maintenance_requests', {
+      const [newRequest] = await db.insert<MaintenanceRequest>('maintenance_requests', {
         ...newRequest,
         request_number: requestNumber,
         status: 'pending',
         reported_by: user?.id || '1',
       });
 
-      Alert.alert('Success', 'Maintenance request created successfully');
+      if (newRequest) {
+        Alert.alert('Success', 'Maintenance request created successfully');
+      }
       setNewRequestModal(false);
       setNewRequest({
         title: '',
@@ -122,11 +124,13 @@ export default function Maintenance() {
         updates.completed_at = new Date().toISOString();
       }
 
-      await db.update<MaintenanceRequest>('maintenance_requests', requestId, updates);
+      const [updatedRequest] = await db.update<MaintenanceRequest>('maintenance_requests', requestId, updates);
       
-      setRequests(requests.map(request => 
-        request.id === requestId ? { ...request, ...updates } : request
-      ));
+      if (updatedRequest) {
+        setRequests(requests.map(request => 
+          request.id === requestId ? { ...request, ...updates } : request
+        ));
+      }
 
       Alert.alert('Success', 'Request status updated');
     } catch (error) {

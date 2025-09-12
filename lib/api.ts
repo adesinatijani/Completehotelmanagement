@@ -114,7 +114,7 @@ export class ApiClient {
   async insert<T extends keyof Tables>(
     table: T,
     data: Tables[T]['Insert'] | Tables[T]['Insert'][]
-  ): Promise<Tables[T]['Row'][]> {
+  ): Promise<Tables[T]['Row']> {
     return this.withRetry(async () => {
       const { data: result, error } = await supabase
         .from(table)
@@ -126,7 +126,7 @@ export class ApiClient {
       // Invalidate related cache
       this.invalidateTableCache(table as string);
 
-      return result || [];
+      return (result && result[0]) || data as Tables[T]['Row'];
     });
   }
 
@@ -134,7 +134,7 @@ export class ApiClient {
     table: T,
     data: Tables[T]['Update'],
     filters: Record<string, any>
-  ): Promise<Tables[T]['Row'][]> {
+  ): Promise<Tables[T]['Row']> {
     return this.withRetry(async () => {
       let query = supabase.from(table).update(data);
 
@@ -148,7 +148,7 @@ export class ApiClient {
       // Invalidate related cache
       this.invalidateTableCache(table as string);
 
-      return result || [];
+      return (result && result[0]) || { ...data, ...filters } as Tables[T]['Row'];
     });
   }
 
@@ -192,8 +192,10 @@ export class ApiClient {
     
     for (let i = 0; i < data.length; i += batchSize) {
       const batch = data.slice(i, i + batchSize);
-      const batchResult = await this.insert(table, batch);
-      results.push(...batchResult);
+      for (const item of batch) {
+        const result = await this.insert(table, item);
+        results.push(result);
+      }
     }
     
     return results;

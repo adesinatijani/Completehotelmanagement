@@ -49,11 +49,13 @@ export default function Pool() {
 
   const updateOrderStatus = async (orderId: string, status: Order['status']) => {
     try {
-      await db.update<Order>('orders', orderId, { status });
+      const [updatedOrder] = await db.update<Order>('orders', orderId, { status });
 
-      setOrders(orders.map(order => 
-        order.id === orderId ? { ...order, status } : order
-      ));
+      if (updatedOrder) {
+        setOrders(orders.map(order => 
+          order.id === orderId ? { ...order, status } : order
+        ));
+      }
 
       Alert.alert('Success', 'Order status updated');
     } catch (error) {

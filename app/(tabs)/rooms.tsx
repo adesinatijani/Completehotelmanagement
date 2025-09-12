@@ -70,10 +70,14 @@ export default function Rooms() {
 
   const updateRoomStatus = async (roomId: string, status: Room['status']) => {
     try {
-      await db.update<Room>('rooms', roomId, { status });
-      setRooms(rooms.map(room => 
-        room.id === roomId ? { ...room, status } : room
-      ));
+      const [updatedRoom] = await db.update<Room>('rooms', roomId, { status });
+      
+      if (updatedRoom) {
+        setRooms(rooms.map(room => 
+          room.id === roomId ? { ...room, status } : room
+        ));
+      }
+      
       Alert.alert('Success', 'Room status updated');
     } catch (error) {
       console.error('Error updating room status:', error);
@@ -113,7 +117,7 @@ export default function Rooms() {
       // Add bed size to amenities
       amenities.push(`${newRoom.bed_size.charAt(0).toUpperCase() + newRoom.bed_size.slice(1)} Size Bed`);
 
-      await db.insert<Room>('rooms', {
+      const [createdRoom] = await db.insert<Room>('rooms', {
         room_number: newRoom.room_number,
         room_type: newRoom.room_type,
         status: 'available',
@@ -124,7 +128,9 @@ export default function Rooms() {
         description: newRoom.description,
       });
 
-      Alert.alert('Success', 'Room created successfully');
+      if (createdRoom) {
+        Alert.alert('Success', 'Room created successfully');
+      }
       setNewRoomModal(false);
       setNewRoom({
         room_number: '',

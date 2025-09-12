@@ -627,9 +627,11 @@ export class SampleDataLoader {
         
         for (const item of batch) {
           try {
-            await db.insert<MenuItem>('menu_items', item);
-            inserted++;
-            console.log(`✅ Inserted: ${item.name} (${item.category})`);
+            const [insertedItem] = await db.insert<MenuItem>('menu_items', item);
+            if (insertedItem) {
+              inserted++;
+              console.log(`✅ Inserted: ${item.name} (${item.category})`);
+            }
           } catch (error) {
             console.warn(`⚠️ Failed to insert ${item.name}:`, error);
           }
@@ -794,8 +796,10 @@ export class SampleDataLoader {
 
       for (const item of inventoryItems) {
         try {
-          await db.insert('inventory', item);
-          console.log(`✅ Inserted inventory: ${item.item_name}`);
+          const [insertedItem] = await db.insert('inventory', item);
+          if (insertedItem) {
+            console.log(`✅ Inserted inventory: ${item.item_name}`);
+          }
         } catch (error) {
           console.warn(`⚠️ Failed to insert ${item.item_name}:`, error);
         }

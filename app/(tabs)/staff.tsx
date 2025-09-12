@@ -80,14 +80,16 @@ export default function Staff() {
 
     try {
       // Create profile in local database
-      await db.insert('profiles', {
+      const [newProfile] = await db.insert('profiles', {
         email: newStaffMember.email,
         full_name: newStaffMember.full_name,
         role: newStaffMember.role,
         is_active: true,
       });
 
-      Alert.alert('Success', 'Staff member created successfully');
+      if (newProfile) {
+        Alert.alert('Success', 'Staff member created successfully');
+      }
       setNewStaffModal(false);
       setNewStaffMember({
         email: '',
@@ -104,11 +106,13 @@ export default function Staff() {
 
   const updateStaffRole = async (staffId: string, newRole: Profile['role']) => {
     try {
-      await db.update('profiles', staffId, { role: newRole });
+      const [updatedProfile] = await db.update('profiles', staffId, { role: newRole });
 
-      setStaff(staff.map(member => 
-        member.id === staffId ? { ...member, role: newRole } : member
-      ));
+      if (updatedProfile) {
+        setStaff(staff.map(member => 
+          member.id === staffId ? { ...member, role: newRole } : member
+        ));
+      }
 
       Alert.alert('Success', 'Staff role updated successfully');
     } catch (error) {

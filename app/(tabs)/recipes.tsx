@@ -78,12 +78,14 @@ export default function Recipes() {
     }
 
     try {
-      await db.insert<Recipe>('recipes', {
+      const [newRecipe] = await db.insert<Recipe>('recipes', {
         ...newRecipe,
         created_by: user?.id || '1',
       });
 
-      Alert.alert('Success', 'Recipe created successfully');
+      if (newRecipe) {
+        Alert.alert('Success', 'Recipe created successfully');
+      }
       setNewRecipeModal(false);
       setNewRecipe({
         name: '',

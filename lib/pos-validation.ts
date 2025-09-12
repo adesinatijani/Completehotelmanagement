@@ -1,4 +1,5 @@
 // POS System Validation Library
+import React, { useEffect } from 'react';
 import { Database } from '@/types/database';
 
 type MenuItem = Database['public']['Tables']['menu_items']['Row'];
@@ -103,6 +104,20 @@ export class POSValidator {
     return { isValid: true };
   }
 
+  static validateTableNumber(tableNumber: string): ValidationResult {
+    if (!tableNumber || tableNumber.trim().length === 0) {
+      return { isValid: true }; // Allow empty table numbers for some order types
+    }
+
+    // Table numbers should be alphanumeric or contain "Guest"
+    const validPattern = /^[a-zA-Z0-9\s]+$/;
+    if (!validPattern.test(tableNumber.trim())) {
+      return { isValid: false, error: 'Invalid table number format' };
+    }
+
+    return { isValid: true };
+  }
+
   static validateRoomNumber(roomNumber: string): ValidationResult {
     if (!roomNumber || roomNumber.trim().length === 0) {
       return { isValid: false, error: 'Room number is required' };
@@ -112,6 +127,25 @@ export class POSValidator {
     const validPattern = /^[a-zA-Z0-9]+$/;
     if (!validPattern.test(roomNumber.trim())) {
       return { isValid: false, error: 'Invalid room number format' };
+    }
+
+    return { isValid: true };
+  }
+
+  static validatePaymentAmount(amount: number): ValidationResult {
+    if (!Number.isFinite(amount)) {
+      return { isValid: false, error: 'Invalid payment amount' };
+    }
+
+    if (amount < this.MIN_ORDER_VALUE) {
+      return { isValid: false, error: `Payment amount too low (minimum $${this.MIN_ORDER_VALUE})` };
+    }
+
+    if (amount > this.MAX_ORDER_VALUE) {
+      return { 
+        isValid: false, 
+        error: `Payment amount exceeds maximum limit of $${this.MAX_ORDER_VALUE.toLocaleString()}` 
+      };
     }
 
     return { isValid: true };

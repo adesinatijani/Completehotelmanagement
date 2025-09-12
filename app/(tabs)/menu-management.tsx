@@ -81,8 +81,10 @@ export default function MenuManagement() {
     }
 
     try {
-      await db.insert<MenuItem>('menu_items', newItem);
-      Alert.alert('Success', 'Menu item created successfully');
+      const [createdItem] = await db.insert<MenuItem>('menu_items', newItem);
+      if (createdItem) {
+        Alert.alert('Success', 'Menu item created successfully');
+      }
       setNewItemModal(false);
       resetNewItem();
       await loadMenuItems();
@@ -125,7 +127,7 @@ export default function MenuManagement() {
       
       console.log('Updating menu item:', selectedItem.id, 'with data:', updateData);
       
-      const updatedItem = await db.update<MenuItem>('menu_items', selectedItem.id, updateData);
+      const [updatedItem] = await db.update<MenuItem>('menu_items', selectedItem.id, updateData);
       
       console.log('Menu item updated successfully:', updatedItem);
       

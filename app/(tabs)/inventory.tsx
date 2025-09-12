@@ -109,14 +109,16 @@ export default function Inventory() {
     try {
       const totalValue = newItem.current_stock * newItem.unit_cost;
       
-      await db.insert<InventoryItem>('inventory', {
+      const [newInventoryItem] = await db.insert<InventoryItem>('inventory', {
         ...newItem,
         total_value: totalValue,
         last_restocked: new Date().toISOString(),
         reorder_point: newItem.minimum_stock,
       });
 
-      Alert.alert('Success', 'Inventory item created successfully');
+      if (newInventoryItem) {
+        Alert.alert('Success', 'Inventory item created successfully');
+      }
       setNewItemModal(false);
       setNewItem({
         item_name: '',
@@ -147,22 +149,24 @@ export default function Inventory() {
       
       const newValue = newStock * item.unit_cost;
       
-      await db.update<InventoryItem>('inventory', itemId, {
+      const [updatedItem] = await db.update<InventoryItem>('inventory', itemId, {
         current_stock: newStock,
         total_value: newValue,
         last_restocked: new Date().toISOString(),
       });
 
-      setInventory(inventory.map(item => 
-        item.id === itemId 
-          ? { 
-              ...item, 
-              current_stock: newStock, 
-              total_value: newValue,
-              last_restocked: new Date().toISOString() 
-            }
-          : item
-      ));
+      if (updatedItem) {
+        setInventory(inventory.map(item => 
+          item.id === itemId 
+            ? { 
+                ...item, 
+                current_stock: newStock, 
+                total_value: newValue,
+                last_restocked: new Date().toISOString() 
+              }
+            : item
+        ));
+      }
 
       Alert.alert('Success', 'Stock updated successfully');
     } catch (error) {

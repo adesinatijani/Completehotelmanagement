@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { db } from '@/lib/database';
 import { loadHotelSettings } from '@/lib/storage';
+import { sampleDataLoader } from '@/lib/sample-data';
 import { Database } from '@/types/database';
 import { currencyManager } from '@/lib/currency';
 import { 
@@ -111,7 +112,11 @@ export default function Restaurant() {
       // If no menu items found, load sample data
       if (restaurantItems.length === 0) {
         console.log('📋 No menu items found, loading sample data...');
-        await sampleDataLoader.loadSampleMenuData();
+        try {
+          await sampleDataLoader.loadSampleMenuData();
+        } catch (error) {
+          console.warn('Failed to load sample data:', error);
+        }
         // Reload after sample data
         const newMenuData = await db.select<MenuItem>('menu_items');
         const newRestaurantItems = newMenuData.filter(item => 
@@ -365,24 +370,27 @@ export default function Restaurant() {
       console.log('💾 Saving order to database with payment:', orderData);
       
       // Save order to database
-      const order = await db.insert('orders', orderData);
+      const [order] = await db.insert('orders', orderData);
       
       console.log('✅ Order saved and sent to kitchen:', order);
 
       // Create financial transaction for accounting
       try {
-        await db.insert('transactions', {
+        const [transaction] = await db.insert('transactions', {
           transaction_number: `TXN-${orderNumber}`,
           type: 'income',
           category: 'food_beverage',
           amount: totals.total,
           description: `Restaurant order - ${paymentMethod} payment`,
-          reference_id: order.id,
+          reference_id: order?.id || orderNumber,
           payment_method: paymentMethod.toLowerCase(),
           transaction_date: new Date().toISOString().split('T')[0],
           processed_by: user?.id || 'pos_system',
         });
-        console.log('✅ Financial transaction recorded for restaurant order');
+        
+        if (transaction) {
+          console.log('✅ Financial transaction recorded for restaurant order');
+        }
       } catch (transactionError) {
         console.warn('Failed to record financial transaction (non-critical):', transactionError);
       }

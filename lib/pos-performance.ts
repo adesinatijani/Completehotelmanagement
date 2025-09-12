@@ -1,5 +1,6 @@
 // POS Performance Optimization System
 import { useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { Database } from '@/types/database';
 
 type MenuItem = Database['public']['Tables']['menu_items']['Row'];

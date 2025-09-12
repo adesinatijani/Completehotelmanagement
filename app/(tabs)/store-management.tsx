@@ -83,22 +83,24 @@ export default function StoreManagement() {
       const newStock = selectedItem.current_stock + quantity;
       const newValue = newStock * selectedItem.unit_cost;
       
-      await db.update<InventoryItem>('inventory', selectedItem.id, {
+      const [updatedItem] = await db.update<InventoryItem>('inventory', selectedItem.id, {
         current_stock: newStock,
         total_value: newValue,
         last_restocked: new Date().toISOString(),
       });
 
-      setInventory(inventory.map(item => 
-        item.id === selectedItem.id 
-          ? { 
-              ...item, 
-              current_stock: newStock,
-              total_value: newValue,
-              last_restocked: new Date().toISOString()
-            }
-          : item
-      ));
+      if (updatedItem) {
+        setInventory(inventory.map(item => 
+          item.id === selectedItem.id 
+            ? { 
+                ...item, 
+                current_stock: newStock,
+                total_value: newValue,
+                last_restocked: new Date().toISOString()
+              }
+            : item
+        ));
+      }
 
       Alert.alert('Success', `Added ${quantity} units to ${selectedItem.item_name}`);
       setRestockModal(false);
@@ -119,14 +121,16 @@ export default function StoreManagement() {
     try {
       const totalValue = newItem.current_stock * newItem.unit_cost;
       
-      await db.insert<InventoryItem>('inventory', {
+      const [createdItem] = await db.insert<InventoryItem>('inventory', {
         ...newItem,
         total_value: totalValue,
         last_restocked: new Date().toISOString(),
         reorder_point: newItem.minimum_stock,
       });
 
-      Alert.alert('Success', 'Inventory item added successfully');
+      if (createdItem) {
+        Alert.alert('Success', 'Inventory item added successfully');
+      }
       setNewItemModal(false);
       setNewItem({
         item_name: '',

@@ -170,6 +170,8 @@ export default function Settings() {
     );
   };
 
+  const roleOptions: Profile['role'][] = ['manager', 'receptionist', 'kitchen_staff', 'bar_staff', 'housekeeping'];
+
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient

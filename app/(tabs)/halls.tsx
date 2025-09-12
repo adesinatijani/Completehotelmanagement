@@ -73,13 +73,15 @@ export default function Halls() {
     }
 
     try {
-      await db.insert<HallBooking>('hall_bookings', {
+      const [newHallBooking] = await db.insert<HallBooking>('hall_bookings', {
         ...newBooking,
         payment_status: 'pending',
         booking_status: 'confirmed',
       });
 
-      Alert.alert('Success', 'Hall booking created successfully');
+      if (newHallBooking) {
+        Alert.alert('Success', 'Hall booking created successfully');
+      }
       setNewBookingModal(false);
       setNewBooking({
         hall_id: '',
@@ -103,10 +105,14 @@ export default function Halls() {
 
   const updateBookingStatus = async (bookingId: string, status: HallBooking['booking_status']) => {
     try {
-      await db.update<HallBooking>('hall_bookings', bookingId, { booking_status: status });
-      setHallBookings(hallBookings.map(booking => 
-        booking.id === bookingId ? { ...booking, booking_status: status } : booking
-      ));
+      const [updatedBooking] = await db.update<HallBooking>('hall_bookings', bookingId, { booking_status: status });
+      
+      if (updatedBooking) {
+        setHallBookings(hallBookings.map(booking => 
+          booking.id === bookingId ? { ...booking, booking_status: status } : booking
+        ));
+      }
+      
       Alert.alert('Success', 'Booking status updated');
     } catch (error) {
       console.error('Error updating booking status:', error);

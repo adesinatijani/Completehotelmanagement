@@ -130,7 +130,7 @@ export default function RecipeKitchen() {
           const newValue = newStock * inventoryItem.unit_cost;
 
           updates.push(
-            db.update<InventoryItem>('inventory', inventoryItem.id, {
+            db.update('inventory', inventoryItem.id, {
               current_stock: newStock,
               total_value: newValue,
             })
